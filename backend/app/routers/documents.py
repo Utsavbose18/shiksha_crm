@@ -294,14 +294,14 @@ def create_document_field(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """
-    Create a single document field for a student.
-    Staff only. Use doc_type='other' for fully custom fields.
-    """
-    _get_student_or_404(db, student_id)
+    tenant_id = getattr(current_user, "active_tenant_id", None)
     _assert_staff(current_user)
+    student = db.query(Student).filter(Student.id == student_id, Student.tenant_id == tenant_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
 
-    field = DocumentField(
+    new_field = DocumentField(
+        tenant_id=tenant_id,
         student_id=student_id,
         doc_type=payload.doc_type,
         label=payload.label,

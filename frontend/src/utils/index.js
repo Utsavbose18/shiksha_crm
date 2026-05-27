@@ -14,41 +14,38 @@ export const SERVICE_TYPES = ['test_prep','accommodation','flywire','loan','fore
 export const PAYMENT_STATUSES = ['pending','done','partial'];
 export const APPLICATION_STATUS = ['initiated','pending_from_student','pending_from_LS','conditional_offer','unconditional_offer','case_closed','application_on_hold','funds_approved','offer_accepted','rejected','waitlisted', 'deferral','fee_paid','tuition_payment_not_done','visa_applied','visa_approved','visa_rejected'];
 export const VISA_STATUSES = ['not_applied','visa_applied','visa_approved','visa_rejected'];
-export const USER_ROLES = ['admin','counsellor'];
+export const USER_ROLES = ['platform_super_admin','admin','counsellor'];
 
 
 export const NAV_BY_ROLE = {
+  platform_super_admin: [
+    { key: 'dashboard',            label: 'Platform Dashboard',   icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+    { key: 'tenants',              label: 'Tenants',              icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
+    { key: 'users',                label: 'All Users',            icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
+    { key: 'profile',              label: 'Profile',              icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+  ],
   admin: [
-    { key: 'dashboard',            label: 'Dashboard',            icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+    { key: 'dashboard',            label: 'CRM Dashboard',        icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
     { key: 'students',             label: 'Students',             icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
     { key: 'applications',         label: 'Applications',         icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-    { key: 'finance',              label: 'Finance & Services',   icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
-    { key: 'users',                label: 'Users',                icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
-    { key: 'universities',         label: 'Universities',         icon: 'M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z' },
-    { key: 'notes',                label: 'Notes',                icon: 'M9 2H5a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V8l-6-6zM9 2v6h6M7 13h6M7 17h4' },
+    { key: 'finance',              label: 'Finance',              icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
+    { key: 'users',                label: 'Team Members',         icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
+    { key: 'additional_settings',  label: 'CRM Settings',         icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z' },
     { key: 'profile',              label: 'Profile',              icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
-    { key: 'student_enquiry',      label: 'Student Enquiry',      icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM8 9h8M8 13h5' },
-    { key: 'whatsapp', label: 'WhatsApp', icon: 'M17.498 14.382c-.301-.15-1.767-.867-2.04-.966-.273-.101-.473-.15-.673.15-.197.295-.771.964-.944 1.162-.175.195-.349.21-.646.075-.3-.15-1.263-.465-2.403-1.485-.888-.795-1.484-1.77-1.66-2.07-.293-.501-.028-.771.234-.988.218-.19.48-.494.679-.685.198-.19.277-.348.405-.57.131-.225.067-.421-.02-.571-.088-.15-.738-1.77-1.013-2.445-.267-.645-.54-.561-.739-.57-.192-.009-.405-.012-.607-.012-.2 0-.527.075-.803.371-.277.297-1.056 1.02-1.056 2.52 0 1.5 1.095 2.94 1.248 3.142.153.199 2.143 3.253 5.219 4.56.73.312 1.3.5 1.743.645.732.231 1.398.197 1.925.12.587-.088 1.767-.72 2.016-1.413.25-.69.25-1.281.175-1.407-.074-.124-.272-.197-.571-.347z' },
-
   ],
   counsellor: [
     { key: 'dashboard',    label: 'Dashboard',    icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
     { key: 'students',     label: 'Students',     icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
     { key: 'applications', label: 'Applications', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-    { key: 'finance',              label: 'Finance & Services',   icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
-    { key: 'universities', label: 'Universities', icon: 'M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z' },
-    { key: 'notes',        label: 'Notes',        icon: 'M9 2H5a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V8l-6-6zM9 2v6h6M7 13h6M7 17h4' },
+    { key: 'finance',      label: 'Finance',      icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
     { key: 'profile',      label: 'Profile',      icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
-    { key: 'student_enquiry',      label: 'Student Enquiry',      icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM8 9h8M8 13h5' },
-    { key: 'whatsapp', label: 'WhatsApp', icon: 'M17.498 14.382c-.301-.15-1.767-.867-2.04-.966-.273-.101-.473-.15-.673.15-.197.295-.771.964-.944 1.162-.175.195-.349.21-.646.075-.3-.15-1.263-.465-2.403-1.485-.888-.795-1.484-1.77-1.66-2.07-.293-.501-.028-.771.234-.988.218-.19.48-.494.679-.685.198-.19.277-.348.405-.57.131-.225.067-.421-.02-.571-.088-.15-.738-1.77-1.013-2.445-.267-.645-.54-.561-.739-.57 -.192 -.009 -.405 -.012 -.607 -.012 -.2 0 -.527 .075 -.803 .37１ -.2７７ .２９７ -１．０５６ １．０２ -１．０５６ ２．５２ ０ １．５ １．０９５ ２．９４ １．２４８ ３．１４２ .１５３ .１９９ ２．１４３ ３．２５３ ５．２１９ ４．５６ .７３ .３１２ １．３ .５ １．７４３ .６４５ .７３２ .２３１ １．３９８ .１９７ １．９２５ .１２ .５８７ -.０８８ １．７６７ -.７２ ２．０１６ -１．４１３ .２５ -.６９ .２５ -１．２８１ .１７５ -１．４０７ -.０７４ -.₁₂４ -.₂７₂ -.₁₉₇ -.₅₇₁ -.₃₄₇z' },
-
   ],
   student: [
-    { key: 'myinfo',      label: 'My Info',     icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
-    { key: 'profile',      label: 'My Profile',     icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+    { key: 'myinfo',      label: 'My Info',       icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
     { key: 'applications', label: 'My Applications', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
   ],
 };
+
 
 export const storage = {
   get token()   { return localStorage.getItem('crm_access_token') || ''; },
@@ -141,3 +138,25 @@ export async function apiFetch(path, options = {}) {
   }
   return data;
 }
+export const api = {
+  login: async (credentials) => {
+    const params = new URLSearchParams();
+    params.append('username', credentials.username);
+    params.append('password', credentials.password);
+    if (credentials.client_id) {
+        params.append('client_id', credentials.client_id);
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params
+    });
+
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || 'Login failed');
+    }
+    return response.json();
+  }
+};

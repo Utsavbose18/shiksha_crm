@@ -10,8 +10,8 @@ export default function Sidebar({ auth, activeView, setActiveView, logout,  stud
       <div className="sidebar-brand">
         <div className="brand-mark">LS</div>
         <div className="brand-text">
-          <span className="brand-name">LetzStudy</span>
-          <span className="brand-sub">CRM</span>
+          <span className="brand-name">{auth.role === "platform_super_admin" ? "SaaS Platform" : "EduCRM"}</span>
+          <span className="brand-sub">{auth.role === 'platform_super_admin' ? 'Admin' : 'CRM'}</span>
         </div>
       </div>
 

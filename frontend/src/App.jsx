@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import './App.css';
 import React from 'react';
-import { storage, apiFetch, NAV_BY_ROLE } from './utils';
+import { storage, apiFetch, NAV_BY_ROLE, api } from './utils';
 import Sidebar from './components/Sidebar';
 import LoginScreen from './components/LoginScreen';
+import MultiTenantLogin from './pages/public/MultiTenantLogin';
+import { useNavigate } from 'react-router-dom';
 import DashboardView from './components/DashboardView';
+import TenantsView from './components/TenantsView';
 import StudentsView from './components/StudentsView';
 import ApplicationsView from './components/ApplicationsView';
 import ProfileView from './components/ProfileView';
 import ChangePasswordForm from './components/ChangePasswordForm';
 import StudentProfileModal from './components/StudentProfileModal';
 import { UsersView, UniversitiesView } from './components/OtherViews';
+import AdditionalSettingsView from './components/AdditionalSettingsView';
 import NotesPage from './components/NotesPage';
 import { FinanceView } from './components/FinanceView';
 import StudentEnquiryPage from './components/Studentenquirypage';
@@ -105,7 +109,8 @@ function resolveInitialView(role, mustChangePassword, savedView) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function App() {
+function App({ showLoginOnly }) {
+  const navigate = useNavigate();
   const [auth, setAuth] = useState({
     token: storage.token,
     role: storage.role,
@@ -174,48 +179,19 @@ function App() {
     setLoading(true);
     setLoginError('');
     try {
-      const formData = new URLSearchParams();
-      formData.append('username', credentials.email);
-      formData.append('password', credentials.password);
-
-      const data = await apiFetch('/api/auth/login', {
-        method: 'POST',
-        body: formData,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      });
-
-      storage.token = data.access_token;
-      storage.refresh = data.refresh_token;
-      storage.role = data.role;
-      storage.name = data.full_name;
-
-      localStorage.setItem('access_token', data.access_token);
-
-      const forceChange = !!data.must_change_password;
-      localStorage.setItem('must_change_password', forceChange ? 'true' : 'false');
-      clearOpenStudentModal();
-
+      const data = await api.login(credentials);
       setAuth({
         token: data.access_token,
-        accessToken: data.access_token,
         role: data.role,
+        userId: data.user_id,
         fullName: data.full_name,
+        tenantId: data.tenant_id
       });
-
-      setMustChangePassword(forceChange);
-
-      // On fresh login always start at the canonical home page,
-      // then let the user navigate — don't restore the previous session view.
-      const homeView = forceChange
-        ? 'change_password'
-        : data.role === 'student' ? 'profile' : 'dashboard';
-
-      setActiveView(homeView);
-
-      return data;
+      setMustChangePassword(data.must_change_password);
+      setActiveView('dashboard');
+      if (showLoginOnly) navigate('/app');
     } catch (err) {
-      setLoginError(err.message);
-      throw err;
+      setLoginError(err.message || 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -416,7 +392,16 @@ function App() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   if (!auth.token) {
-    return <LoginScreen onLogin={handleLogin} error={loginError} loading={loading} />;
+    if (!showLoginOnly) {
+       // If we're rendering App on /app but not logged in, redirect to login
+       return <div className="p-8 text-center"><p>Redirecting to login...</p>{setTimeout(() => navigate('/login'), 100)}</div>;
+    }
+    return <MultiTenantLogin onLogin={handleLogin} error={loginError} loading={loading} />;
+  }
+
+  if (showLoginOnly && auth.token) {
+     navigate('/app');
+     return null;
   }
 
   const openedStudent = students.find(s => String(s.id) === String(openedStudentId));
@@ -437,6 +422,11 @@ function App() {
         return ['admin', 'counsellor'].includes(auth.role)
           ? <NotesPage />
           : <div className="p-6 text-red-600 font-semibold">Access denied</div>;
+
+      case 'tenants':
+        return auth.role === 'platform_super_admin'
+            ? <TenantsView setGlobalError={setGlobalError} />
+            : <div className="p-6 text-red-600 font-semibold">Access denied</div>;
 
       case 'dashboard':
         return (
@@ -522,14 +512,7 @@ function App() {
         return <UniversitiesView universities={universities} onRefresh={loadUniversities} setGlobalError={setGlobalError} />;
 
       case 'additional_settings':
-        return (
-          <AdditionalSettingsView
-            customFields={customFields}
-            onRefresh={loadCustomFields}
-            setGlobalError={setGlobalError}
-            auth={auth}
-          />
-        );
+        return <AdditionalSettingsView setGlobalError={setGlobalError} />;
 
       case 'profile':
         return <ProfileView profile={profile} auth={auth} setGlobalError={setGlobalError} />;
