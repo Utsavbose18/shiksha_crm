@@ -1,0 +1,70 @@
+# Python cache
+
+**pycache**/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+
+venv/
+.env/
+env/
+ENV/
+
+# VS Code
+
+.vscode/
+
+# Python environment files
+
+.env
+.env.local
+.env.*
+
+# Database files (for local development)
+
+*.db
+*.sqlite3
+
+# Logs
+
+*.log
+
+# OS files
+
+.DS_Store
+Thumbs.db
+
+# Build / distribution
+
+build/
+dist/
+*.egg-info/
+
+# Testing
+
+.pytest_cache/
+.coverage
+
+# Mypy
+
+.mypy_cache/
+
+# IDEs
+
+.idea/
+
+# Temporary files
+
+*.tmp
+*.swp
+
+# Python version manager
+
+.python-version
+
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
