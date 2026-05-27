@@ -4,7 +4,6 @@ Authentication endpoints for all roles.
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
-from fastapi.security import OAuth2PasswordRequestForm
 from app.core.security import oauth2_scheme
 from app.core.database import get_db
 from app.core.security import (
@@ -34,15 +33,17 @@ def _make_tokens(
     role: str,
     full_name: str,
     must_change_password: bool = False,
+    tenant_id: int = None
 ) -> TokenResponse:
-    data = {"sub": str(user_id), "role": role}
+    data = {"sub": str(user_id), "role": role, "tenant_id": tenant_id}
     return TokenResponse(
         access_token=create_access_token(data),
         refresh_token=create_refresh_token(data),
         role=role,
         user_id=user_id,
         full_name=full_name,
-        must_change_password=bool(must_change_password),  # 🔥 force boolean
+        must_change_password=bool(must_change_password),
+        tenant_id=tenant_id
     )
 
 
@@ -53,41 +54,76 @@ def _make_tokens(
 @router.post("/login", response_model=TokenResponse)
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db)
 ):
     email = form_data.username
     password = form_data.password
 
-    # 1️⃣ Student login
-    student = db.query(Student).filter(Student.email == email).first()
-    if student:
-        if not verify_password(password, student.hashed_password):
-            raise HTTPException(status_code=401, detail="Invalid credentials")
-        if not student.is_active:
-            raise HTTPException(status_code=403, detail="Account is inactive")
+    # Determine user and tenant
+    tenant_id_to_use = None
+    if form_data.client_id:
+        from app.models.tenant import Tenant
+        tenant = db.query(Tenant).filter(Tenant.slug == form_data.client_id).first()
+        if not tenant:
+            raise HTTPException(status_code=400, detail="Invalid tenant")
+        tenant_id_to_use = tenant.id
 
-        full_name = f"{student.first_name or ''} {student.last_name or ''}".strip() or student.email
+    # 1️⃣ Student login (requires tenant)
+    if tenant_id_to_use:
+        student = db.query(Student).filter(
+            Student.email == email,
+            Student.tenant_id == tenant_id_to_use
+        ).first()
+        if student:
+            if not verify_password(password, student.hashed_password):
+                raise HTTPException(status_code=401, detail="Invalid credentials")
+            if not student.is_active:
+                raise HTTPException(status_code=403, detail="Account is inactive")
 
-        return _make_tokens(
-            student.id,
-            UserRole.student,
-            full_name,
-            getattr(student, "must_change_password", False),
-        )
+            full_name = f"{student.first_name or ''} {student.last_name or ''}".strip() or student.email
+
+            return _make_tokens(
+                student.id,
+                "student",
+                full_name,
+                getattr(student, "must_change_password", False),
+                tenant_id_to_use
+            )
 
     # 2️⃣ Admin / Counsellor / Staff login
-    user = db.query(User).filter(User.email == email).first()
+    query = db.query(User).filter(User.email == email)
+    if tenant_id_to_use:
+        query = query.filter(User.tenant_id == tenant_id_to_use)
+
+    user = query.first()
+
     if user:
         if not verify_password(password, user.hashed_password):
             raise HTTPException(status_code=401, detail="Invalid credentials")
         if not user.is_active:
             raise HTTPException(status_code=403, detail="Account not activated")
 
+        # Basic role from User model
+        role = user.role
+
+        # Override role with RBAC mapping if a tenant is selected
+        if tenant_id_to_use and role != "platform_super_admin":
+            from app.models.rbac import UserRoleMapping, Role
+            mapping = db.query(UserRoleMapping).filter(
+                UserRoleMapping.user_id == user.id,
+                UserRoleMapping.tenant_id == tenant_id_to_use
+            ).first()
+            if mapping:
+                role_obj = db.query(Role).filter(Role.id == mapping.role_id).first()
+                if role_obj:
+                    role = role_obj.name
+
         return _make_tokens(
             user.id,
-            user.role,
+            role,
             user.full_name,
             getattr(user, "must_change_password", False),
+            tenant_id_to_use or user.tenant_id # fallback to user's primary tenant
         )
 
     raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -106,8 +142,9 @@ def refresh_token(payload: RefreshRequest, db: Session = Depends(get_db)):
 
     user_id = int(decoded["sub"])
     role = decoded["role"]
+    tenant_id = decoded.get("tenant_id")
 
-    if role == UserRole.student or role == "student":
+    if role == "student":
         user = db.query(Student).filter(
             Student.id == user_id,
             Student.is_active == True
@@ -129,7 +166,8 @@ def refresh_token(payload: RefreshRequest, db: Session = Depends(get_db)):
         user_id,
         role,
         full_name,
-        must_change_password,   # 🔥 IMPORTANT
+        must_change_password,
+        tenant_id
     )
 
 
@@ -148,8 +186,7 @@ def change_password(
     user_id = int(payload_token.get("sub"))
     role = payload_token.get("role")
 
-    # 🔥 Fetch correct table explicitly
-    if role == UserRole.student or role == "student":
+    if role == "student":
         user = db.query(Student).filter(Student.id == user_id).first()
     else:
         user = db.query(User).filter(User.id == user_id).first()
@@ -160,10 +197,7 @@ def change_password(
     if not verify_password(payload.current_password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
 
-    # ✅ update password
     user.hashed_password = hash_password(payload.new_password)
-
-    # 🔥 FORCE RESET FLAG (VERY IMPORTANT)
     user.must_change_password = False
 
     db.commit()
@@ -181,8 +215,7 @@ def change_password(
 
 @router.get("/me")
 def get_me(current_user=Depends(get_current_user)):
-    # 🔥 Handle both User and Student safely
-    role = getattr(current_user, "role", UserRole.student)
+    role = getattr(current_user, "role", "student")
 
     return {
         "id": current_user.id,
@@ -192,4 +225,5 @@ def get_me(current_user=Depends(get_current_user)):
             or f"{getattr(current_user, 'first_name', '') or ''} {getattr(current_user, 'last_name', '') or ''}".strip(),
         "is_active": current_user.is_active,
         "must_change_password": getattr(current_user, "must_change_password", False),
+        "tenant_id": getattr(current_user, "active_tenant_id", None)
     }

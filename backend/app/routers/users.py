@@ -44,12 +44,17 @@ def create_user(
 @router.get("/", response_model=List[UserOut])
 def list_users(
     db: Session = Depends(get_db),
-    _=Depends(admin_only),
+    current_user=Depends(admin_only),
     role: UserRole = None,
     skip: int = 0,
     limit: int = 100,
 ):
+    tenant_id = getattr(current_user, "active_tenant_id", None)
     q = db.query(User)
+
+    if current_user.role != "platform_super_admin":
+        q = q.filter(User.tenant_id == tenant_id)
+
     if role:
         q = q.filter(User.role == role)
     return q.offset(skip).limit(limit).all()

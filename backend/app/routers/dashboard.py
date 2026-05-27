@@ -213,9 +213,10 @@ def get_dashboard(
     Full management dashboard.
     Admins see global data; counsellors see only their own students.
     """
+    tenant_id = getattr(current_user, "active_tenant_id", None)
     visible_ids = _student_ids_for_user(db, current_user)
     today = date.today()
-    student_q = db.query(Student)
+    student_q = db.query(Student).filter(Student.tenant_id == tenant_id)
     student_q = _apply_student_filter(student_q, visible_ids)
 
     # Resolve actual ID list for joins (needed even for admin for subqueries)

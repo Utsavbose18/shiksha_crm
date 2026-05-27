@@ -234,10 +234,12 @@ def list_applications(
 @router.get("/api/applications/", response_model=List[ApplicationOut])
 def list_all_applications(
     db: Session = Depends(get_db),
-    _=Depends(staff_roles),
+    current_user=Depends(staff_roles),
 ):
+    tenant_id = getattr(current_user, "active_tenant_id", None)
     return (
         db.query(Application)
+        .filter(Application.tenant_id == tenant_id)
         .options(joinedload(Application.university))
         .order_by(Application.created_at.desc())
         .all()

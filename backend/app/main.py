@@ -20,6 +20,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi import FastAPI
 from app.routers import whatsapp as whatsapp_router
+from app.routers import public
+from app.routers import tenants
+from app.routers import admin_settings
 
 
 
@@ -77,6 +80,9 @@ app.include_router(student_notes.router)
 app.include_router(student_enquiry.router)
 app.include_router(country_templates.router)
 app.include_router(whatsapp_router.router)
+app.include_router(public.router)
+app.include_router(tenants.router)
+app.include_router(admin_settings.router)
 
 # ─── Static file serving for uploads ─────────────────────────────────────────
 app.mount("/uploads", StaticFiles(directory="./uploads"), name="uploads")

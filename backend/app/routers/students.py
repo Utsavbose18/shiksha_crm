@@ -51,8 +51,13 @@ def _get_student_or_404(db: Session, student_id: int) -> Student:
 
 def _assert_access(current_user, student: Student):
     """Admins can access any student. Counsellors only their own. Students only themselves."""
+    tenant_id = getattr(current_user, "active_tenant_id", None)
+
+    if student.tenant_id != tenant_id and getattr(current_user, "role", None) != "platform_super_admin":
+        raise HTTPException(status_code=403, detail="Student belongs to a different tenant")
+
     if hasattr(current_user, "role"):
-        if current_user.role == UserRole.admin:
+        if current_user.role in [UserRole.admin, "platform_super_admin"]:
             return
         if current_user.role == UserRole.counsellor:
             if student.counsellor_id != current_user.id:
@@ -60,6 +65,7 @@ def _assert_access(current_user, student: Student):
             return
 
     if isinstance(current_user, Student):
+
         if current_user.id != student.id:
             raise HTTPException(status_code=403, detail="Access denied")
         return
@@ -85,9 +91,11 @@ def create_student(
     db: Session = Depends(get_db),
     current_user=Depends(staff_roles),
 ):
-    if db.query(Student).filter(Student.email == payload.email).first():
-        raise HTTPException(status_code=400, detail="Email already exists")
+    tenant_id = getattr(current_user, "active_tenant_id", None)
+    if db.query(Student).filter(Student.email == payload.email, Student.tenant_id == tenant_id).first():
+        raise HTTPException(status_code=400, detail="Email already exists in this tenant")
     student = Student(
+        tenant_id=tenant_id,
         email=payload.email,
         hashed_password=hash_password(payload.password),
         letzstudy_email=payload.letzstudy_email,
