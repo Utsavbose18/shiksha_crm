@@ -30,7 +30,7 @@ def log_action(
         ip_address=ip_address,
         user_agent=user_agent
     )
-    
+
     db.add(log_entry)
     db.commit()
     return log_entry

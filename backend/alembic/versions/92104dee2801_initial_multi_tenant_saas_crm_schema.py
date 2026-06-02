@@ -1,7 +1,7 @@
 """Initial multi-tenant SaaS CRM schema
 
 Revision ID: 92104dee2801
-Revises: 
+Revises:
 Create Date: 2026-05-27 09:25:54.369202
 
 """

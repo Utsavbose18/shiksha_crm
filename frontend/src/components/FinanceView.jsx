@@ -125,37 +125,87 @@ async function downloadInvoicePDF(paymentId, setError) {
 }
 
 // ── Invoice Button ────────────────────────────────────────────────────────────
-function InvoiceButton({ paymentId, setGlobalError }) {
+function InvoiceButton({ payment, students, setGlobalError }) {
   const [loading, setLoading] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [sending, setSending] = useState(false);
 
-  async function handleClick() {
+  async function handleDownload() {
     setLoading(true);
-    await downloadInvoicePDF(paymentId, setGlobalError);
+    await downloadInvoicePDF(payment.id, setGlobalError);
     setLoading(false);
   }
 
+  async function handleSend() {
+    setSending(true);
+    try {
+        const res = await apiFetch(`/api/payments/${payment.id}/send-invoice`, { method: 'POST' });
+        alert(res.message || 'Invoice sent successfully');
+        setShowPreview(false);
+    } catch(err) {
+        setGlobalError?.(err.message || "Failed to send invoice");
+    } finally {
+        setSending(false);
+    }
+  }
+
+  const studentName = payment.manual_student_name || (() => {
+     const s = (students||[]).find(x => String(x.id) === String(payment.student_id));
+     return s ? `${s.first_name} ${s.last_name}` : `Student #${payment.student_id}`;
+  })();
+
   return (
-    <button
-      title="Download Invoice PDF"
-      onClick={handleClick}
-      disabled={loading}
-      style={{
-        background: loading ? '#d1fae5' : '#ecfdf5',
-        border: '1px solid #10b981',
-        borderRadius: 6,
-        padding: '5px 9px',
-        cursor: loading ? 'wait' : 'pointer',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 4,
-        color: '#059669',
-        fontSize: 12,
-        fontWeight: 600,
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {loading ? '⏳' : '📄'} {loading ? 'Generating...' : 'Invoice'}
-    </button>
+    <>
+      <button
+        title="Preview & Actions"
+        onClick={() => setShowPreview(true)}
+        disabled={loading}
+        style={{
+          background: loading ? '#d1fae5' : '#ecfdf5',
+          border: '1px solid #10b981',
+          borderRadius: 6,
+          padding: '5px 9px',
+          cursor: loading ? 'wait' : 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 4,
+          color: '#059669',
+          fontSize: 12,
+          fontWeight: 600,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {loading ? '⏳' : '📄'} {loading ? 'Wait...' : 'Invoice'}
+      </button>
+
+      {showPreview && (
+          <Modal title={`Invoice Preview (#${payment.id})`} onClose={() => setShowPreview(false)}>
+             <div className="p-4 bg-gray-50 border rounded-lg mb-4 text-sm font-mono whitespace-pre-wrap leading-relaxed relative text-gray-800">
+               <div><strong>Student:</strong> {studentName}</div>
+               <div><strong>Service:</strong> {formatLabel(payment.payment_type)}</div>
+               <div><strong>Amount:</strong> {formatCurrency(payment.amount, payment.currency)}</div>
+               <div><strong>Paid:</strong> {formatCurrency(payment.paid_amount || 0, payment.currency)}</div>
+               <div><strong>Status:</strong> {formatLabel(payment.status)}</div>
+               <div><strong>Date:</strong> {formatDate(payment.payment_date)}</div>
+               {payment.reference && <div><strong>Reference:</strong> {payment.reference}</div>}
+             </div>
+             <div className="flex gap-2 justify-end">
+                <button
+                  onClick={handleSend} disabled={sending}
+                  className="bg-white border text-blue-600 px-4 py-2 rounded text-sm font-semibold hover:bg-blue-50 transition"
+                >
+                  {sending ? 'Sending...' : '✉️ Send to Email'}
+                </button>
+                <button
+                  onClick={handleDownload} disabled={loading}
+                  className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-semibold hover:bg-blue-700 transition"
+                >
+                  {loading ? 'Generating...' : '📥 Download PDF'}
+                </button>
+             </div>
+          </Modal>
+      )}
+    </>
   );
 }
 
@@ -1019,7 +1069,7 @@ export function FinanceView({ students, setGlobalError }) {
                   <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                       {(p.status === 'done' || p.status === 'partial') && (
-                        <InvoiceButton paymentId={p.id} setGlobalError={setGlobalError} />
+                        <InvoiceButton payment={p} students={students} setGlobalError={setGlobalError} />
                       )}
                       <button
                         title="Edit payment"

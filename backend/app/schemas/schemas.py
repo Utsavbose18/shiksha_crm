@@ -32,10 +32,11 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
-    role: UserRole
+    role: str
     user_id: int
     full_name: str
     must_change_password: bool = False
+    tenant_id: Optional[int] = None
 
 
 class RefreshRequest(BaseModel):

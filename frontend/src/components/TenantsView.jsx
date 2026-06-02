@@ -44,7 +44,7 @@ export default function TenantsView({ setGlobalError }) {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Platform Tenants</h1>
-        <button 
+        <button
           onClick={() => setShowModal(true)}
           className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700"
         >
@@ -95,12 +95,12 @@ export default function TenantsView({ setGlobalError }) {
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Company Name</label>
-                <input required type="text" className="mt-1 block w-full border rounded-md p-2" 
+                <input required type="text" className="mt-1 block w-full border rounded-md p-2"
                   value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Tenant Slug (for login URL)</label>
-                <input required type="text" className="mt-1 block w-full border rounded-md p-2" 
+                <input required type="text" className="mt-1 block w-full border rounded-md p-2"
                   value={formData.slug} onChange={e => setFormData({...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '')})} />
               </div>
               <div>

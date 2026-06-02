@@ -17,6 +17,8 @@ from sqlalchemy import (
 )
  
 from sqlalchemy.orm import relationship
+from app.models.tenant import Tenant
+from app.models.branch import Branch
 import enum
 
 from app.core.database import Base
@@ -33,9 +35,10 @@ invoice_pdf = Column(LargeBinary, nullable=True)
 # ─── Enums ────────────────────────────────────────────────────────────────────
 
 class UserRole(str, enum.Enum):
+    platform_super_admin = "platform_super_admin"
+    platform_support = "platform_support"
     admin = "admin"
     counsellor = "counsellor"
-    student = "student"
 
 
 class LeadStatus(str, enum.Enum):
@@ -200,6 +203,8 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    branch_id = Column(Integer, ForeignKey("branches.id"), nullable=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=False)
@@ -230,13 +235,12 @@ class Student(Base):
     __tablename__ = "students"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    branch_id = Column(Integer, ForeignKey("branches.id"), nullable=True, index=True)
 
-    # ── Auth ──
-    email = Column(String(255), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(255), nullable=False)
-    letzstudy_email = Column(String(255), unique=True, index=True, nullable=False)
+    # ── Identity ──
+    email = Column(String(255), index=True, nullable=False)
     is_active = Column(Boolean, default=True)
-    must_change_password = Column(Boolean, default=True)
     highest_education = Column(
         Enum(HighestEducation, name="highesteducation"),
         nullable=True,
@@ -336,6 +340,7 @@ class AcademicQualification(Base):
     __tablename__ = "academic_qualifications"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
 
     level = Column(Enum(AcademicLevel), nullable=False)
@@ -367,6 +372,7 @@ class WorkExperience(Base):
     __tablename__ = "work_experiences"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
     company_name = Column(String(255))
     job_title = Column(String(255))
@@ -416,6 +422,7 @@ class TestScore(Base):
     __tablename__ = "test_scores"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
     test_type_id = Column(Integer, ForeignKey("test_types.id"), nullable=False)
 
@@ -592,6 +599,7 @@ class University(Base):
     __tablename__ = "universities"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     name = Column(String(255), nullable=False)
 
     # country is REQUIRED
@@ -611,6 +619,7 @@ class Notification(Base):
     __tablename__ = "notification"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     student_id = Column(Integer)
     application_id = Column(Integer)  # ✅ ADD THIS
     message = Column(Text)
@@ -623,6 +632,8 @@ class Application(Base):
     __tablename__ = "applications"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    branch_id = Column(Integer, ForeignKey("branches.id"), nullable=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
     university_id = Column(Integer, ForeignKey("universities.id"), nullable=False)
     course_name = Column(String(255))
@@ -664,6 +675,7 @@ class ApplicationMessage(Base):
     __tablename__ = "application_messages"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     application_id = Column(Integer, ForeignKey("applications.id"), nullable=False)
     sender_type = Column(String(20))
     sender_id = Column(Integer)
@@ -680,6 +692,7 @@ class StudentService(Base):
     __tablename__ = "student_services"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
     service_type = Column(Enum(ServiceType), nullable=False)
     provider = Column(String(255), nullable=True)
@@ -728,6 +741,8 @@ class Note(Base):
     __tablename__ = "notes"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    branch_id = Column(Integer, ForeignKey("branches.id"), nullable=True, index=True)
     title = Column(String(255), nullable=False, default="Untitled")
     content = Column(Text, nullable=True)
     parent_id = Column(Integer, ForeignKey("notes.id"), nullable=True)
@@ -745,6 +760,7 @@ class NoteFile(Base):
     __tablename__ = "note_files"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     note_id = Column(Integer, ForeignKey("notes.id"), nullable=False)
     file_name = Column(String(255), nullable=False)
     mime_type = Column(String(100), nullable=True)
@@ -759,6 +775,7 @@ class StudentNote(Base):
     __tablename__ = "student_notes"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
     title = Column(String(255), default="Untitled")
     content = Column(Text)
@@ -775,6 +792,7 @@ class EnquiryStudent(Base):
     __tablename__ = "enquiry_students"
  
     id          = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     name        = Column(String(255), nullable=False, index=True)
     intake_month= Column(String(50), nullable=True, index=True)
     intake_year = Column(Integer, nullable=False, index=True)
@@ -795,6 +813,7 @@ class EnquiryNote(Base):
     __tablename__ = "enquiry_notes"
  
     id           = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     enquiry_id   = Column(Integer, ForeignKey("enquiry_students.id"), nullable=False, index=True)
     parent_id    = Column(Integer, ForeignKey("enquiry_notes.id"), nullable=True)
     title        = Column(String(255), nullable=False, default="Untitled")
@@ -820,6 +839,7 @@ class CountryDocTemplate(Base):
     __tablename__ = "country_doc_templates"
 
     id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     country = Column(String(100), unique=True, nullable=False, index=True)
 
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -887,6 +907,7 @@ class WhatsAppMessage(Base):
     __tablename__ = "whatsapp_messages"
 
     id              = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     contact_id      = Column(Integer, ForeignKey("whatsapp_contacts.id"), nullable=False, index=True)
     wa_message_id   = Column(String(255), unique=True, nullable=True, index=True)  # Meta's wamid
     direction       = Column(String(10),  nullable=False)          # 'inbound' | 'outbound'

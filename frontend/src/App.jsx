@@ -1,16 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import './App.css';
 import React from 'react';
-import { storage, apiFetch, NAV_BY_ROLE } from './utils';
+import { storage, apiFetch, NAV_BY_ROLE, api } from './utils';
 import Sidebar from './components/Sidebar';
 import LoginScreen from './components/LoginScreen';
+import StaffLogin from './pages/public/StaffLogin';
+import { useNavigate } from 'react-router-dom';
 import DashboardView from './components/DashboardView';
+import TenantsView from './components/TenantsView';
 import StudentsView from './components/StudentsView';
 import ApplicationsView from './components/ApplicationsView';
 import ProfileView from './components/ProfileView';
-import ChangePasswordForm from './components/ChangePasswordForm';
 import StudentProfileModal from './components/StudentProfileModal';
 import { UsersView, UniversitiesView } from './components/OtherViews';
+import AdditionalSettingsView from './components/AdditionalSettingsView';
+import FirstLoginPasswordChange from './components/FirstLoginPasswordChange';
+import SetupWizard from './components/SetupWizard';
 import NotesPage from './components/NotesPage';
 import { FinanceView } from './components/FinanceView';
 import StudentEnquiryPage from './components/Studentenquirypage';
@@ -94,18 +99,14 @@ const ROLE_ALLOWED_VIEWS = {
 
 function resolveInitialView(role, mustChangePassword, savedView) {
   if (mustChangePassword) return 'change_password';
-  if (role === 'student') {
-    // Students only land on profile or their own whitelisted views
-    if (savedView && ROLE_ALLOWED_VIEWS.student?.has(savedView)) return savedView;
-    return 'profile';
-  }
   if (savedView && ROLE_ALLOWED_VIEWS[role]?.has(savedView)) return savedView;
   return 'dashboard';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function App() {
+function App({ showLoginOnly }) {
+  const navigate = useNavigate();
   const [auth, setAuth] = useState({
     token: storage.token,
     role: storage.role,
@@ -119,8 +120,11 @@ function App() {
 
   const [activeView, setActiveViewRaw] = useState(() => {
     const must = localStorage.getItem('must_change_password') === 'true';
+    const isSetupIncomplete = storage.role === 'admin' && localStorage.getItem('setup_wizard_complete') !== 'true';
+    if (must) return 'change_password';
+    if (isSetupIncomplete) return 'setup_wizard';
     const saved = loadActiveView();
-    return resolveInitialView(storage.role, must, saved);
+    return resolveInitialView(storage.role, false, saved);
   });
 
   // Wrap setter so every navigation also persists to localStorage
@@ -174,48 +178,19 @@ function App() {
     setLoading(true);
     setLoginError('');
     try {
-      const formData = new URLSearchParams();
-      formData.append('username', credentials.email);
-      formData.append('password', credentials.password);
-
-      const data = await apiFetch('/api/auth/login', {
-        method: 'POST',
-        body: formData,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      });
-
-      storage.token = data.access_token;
-      storage.refresh = data.refresh_token;
-      storage.role = data.role;
-      storage.name = data.full_name;
-
-      localStorage.setItem('access_token', data.access_token);
-
-      const forceChange = !!data.must_change_password;
-      localStorage.setItem('must_change_password', forceChange ? 'true' : 'false');
-      clearOpenStudentModal();
-
+      const data = await api.login(credentials);
       setAuth({
         token: data.access_token,
-        accessToken: data.access_token,
         role: data.role,
+        userId: data.user_id,
         fullName: data.full_name,
+        tenantId: data.tenant_id
       });
-
-      setMustChangePassword(forceChange);
-
-      // On fresh login always start at the canonical home page,
-      // then let the user navigate — don't restore the previous session view.
-      const homeView = forceChange
-        ? 'change_password'
-        : data.role === 'student' ? 'profile' : 'dashboard';
-
-      setActiveView(homeView);
-
-      return data;
+      setMustChangePassword(data.must_change_password);
+      setActiveView('dashboard');
+      if (showLoginOnly) navigate('/app');
     } catch (err) {
-      setLoginError(err.message);
-      throw err;
+      setLoginError(err.message || 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -246,8 +221,16 @@ function App() {
   function handlePasswordChanged() {
     localStorage.setItem('must_change_password', 'false');
     setMustChangePassword(false);
-    const homeView = auth.role === 'student' ? 'profile' : 'dashboard';
-    setActiveView(homeView);
+    const isSetupIncomplete = auth.role === 'admin' && localStorage.getItem('setup_wizard_complete') !== 'true';
+    if (isSetupIncomplete) {
+        setActiveView('setup_wizard');
+    } else {
+        setActiveView('dashboard');
+    }
+  }
+
+  function handleSetupWizardComplete() {
+    setActiveView('dashboard');
   }
 
   // ── Data loaders ──────────────────────────────────────────────────────────
@@ -374,17 +357,17 @@ function App() {
   useEffect(() => {
     if (!auth.token || mustChangePassword) return;
     const loaders = {
-      dashboard:           auth.role !== 'student' ? loadDashboard : null,
-      students:            auth.role !== 'student' ? loadStudents : null,
+      dashboard:           loadDashboard,
+      students:            loadStudents,
       users:               auth.role === 'admin' ? loadUsers : null,
-      universities:        auth.role !== 'student' ? loadUniversities : null,
+      universities:        loadUniversities,
       applications:        loadApplications,
-      services:            auth.role !== 'student' ? loadServices : null,
+      services:            loadServices,
       profile:             loadProfile,
       additional_settings: auth.role === 'admin' ? loadCustomFields : null,
       notes:               ['admin', 'counsellor'].includes(auth.role) ? async () => {} : null,
       student_enquiry:     ['admin', 'counsellor'].includes(auth.role) ? async () => {} : null,
-      finance:             auth.role !== 'student' ? async () => {} : null,
+      finance:             async () => {},
     };
     const run = loaders[activeView];
     if (run) run().catch(err => setGlobalError(err.message));
@@ -416,27 +399,46 @@ function App() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   if (!auth.token) {
-    return <LoginScreen onLogin={handleLogin} error={loginError} loading={loading} />;
+    if (!showLoginOnly) {
+       // If we're rendering App on /app but not logged in, redirect to login
+       return <div className="p-8 text-center"><p>Redirecting to login...</p>{setTimeout(() => navigate('/login'), 100)}</div>;
+    }
+    return <StaffLogin onLogin={handleLogin} error={loginError} loading={loading} />;
+  }
+
+  if (showLoginOnly && auth.token) {
+     navigate('/app');
+     return null;
   }
 
   const openedStudent = students.find(s => String(s.id) === String(openedStudentId));
+
+  if (activeView === 'change_password' || activeView === 'setup_wizard') {
+    return renderView();
+  }
 
   function renderView() {
     switch (activeView) {
       case 'change_password':
         return (
-          <ChangePasswordForm
+          <FirstLoginPasswordChange
             auth={auth}
-            onLogout={logout}
             onPasswordChanged={handlePasswordChanged}
-            forceChange={mustChangePassword}
           />
         );
+
+      case 'setup_wizard':
+        return <SetupWizard onComplete={handleSetupWizardComplete} />;
 
       case 'notes':
         return ['admin', 'counsellor'].includes(auth.role)
           ? <NotesPage />
           : <div className="p-6 text-red-600 font-semibold">Access denied</div>;
+
+      case 'tenants':
+        return auth.role === 'platform_super_admin'
+            ? <TenantsView setGlobalError={setGlobalError} />
+            : <div className="p-6 text-red-600 font-semibold">Access denied</div>;
 
       case 'dashboard':
         return (
@@ -472,21 +474,6 @@ function App() {
         );
 
       case 'applications':
-        if (auth.role === 'student') {
-          if (!profile) return null;
-          return (
-            <StudentProfileModal
-              student={profile}
-              studentId={profile.id ?? profile.student_id}
-              users={[]}
-              isAdmin={false}
-              isCounsellor={false}
-              userRole={auth.role}
-              initialTab="applications"
-              setGlobalError={setGlobalError}
-            />
-          );
-        }
         return (
           <ApplicationsView
             applications={applications}
@@ -522,32 +509,10 @@ function App() {
         return <UniversitiesView universities={universities} onRefresh={loadUniversities} setGlobalError={setGlobalError} />;
 
       case 'additional_settings':
-        return (
-          <AdditionalSettingsView
-            customFields={customFields}
-            onRefresh={loadCustomFields}
-            setGlobalError={setGlobalError}
-            auth={auth}
-          />
-        );
+        return <AdditionalSettingsView setGlobalError={setGlobalError} />;
 
       case 'profile':
         return <ProfileView profile={profile} auth={auth} setGlobalError={setGlobalError} />;
-
-      case 'myinfo': {
-        if (!profile) return null;
-        return (
-          <StudentProfileModal
-            student={profile}
-            studentId={profile.id ?? profile.student_id}
-            users={users}
-            isAdmin={false}
-            isCounsellor={false}
-            userRole={auth.role}
-            setGlobalError={setGlobalError}
-          />
-        );
-      }
 
       case 'student_enquiry':
         return ['admin', 'counsellor'].includes(auth.role)
@@ -600,6 +565,20 @@ function App() {
       />
 
       <div className="main-area">
+        {sessionStorage.getItem('crm_impersonate_token') && (
+            <div className="bg-indigo-600 text-white text-sm py-2 px-4 flex justify-between items-center sticky top-0 z-50 shadow-md">
+                <span><strong>Impersonation Mode:</strong> You are viewing as {sessionStorage.getItem('crm_impersonate_name')}</span>
+                <button
+                   className="bg-white text-indigo-600 px-3 py-1 rounded text-xs font-bold hover:bg-indigo-50"
+                   onClick={() => {
+                       sessionStorage.removeItem('crm_impersonate_token');
+                       sessionStorage.removeItem('crm_impersonate_name');
+                       window.location.href = '/app';
+                   }}>
+                   Exit
+                </button>
+            </div>
+        )}
         <header className="topbar">
           <div>
             <h2 className="topbar-title">{currentNav?.label || 'Dashboard'}</h2>
@@ -617,18 +596,12 @@ function App() {
           </div>
         )}
 
-        {auth.role === 'student' && !mustChangePassword && (
-          <div className="info-banner">
-            You are viewing the student portal. Contact your counsellor for assistance.
-          </div>
-        )}
-
         <div className="view-content">
           {renderView()}
         </div>
       </div>
 
-      {openedStudentId && auth.role !== 'student' && (
+      {openedStudentId && (
         <StudentProfileModal
           studentId={openedStudentId}
           student={openedStudent || {}}

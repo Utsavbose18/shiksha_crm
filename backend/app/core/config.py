@@ -1,5 +1,3 @@
-# app/core/config.py
-
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 import google.generativeai as genai
@@ -18,19 +16,19 @@ class Settings(BaseSettings):
     STORAGE_BACKEND: str
     UPLOAD_DIR: str
 
-    AWS_ACCESS_KEY_ID: str
-    AWS_SECRET_ACCESS_KEY: str
-    AWS_BUCKET_NAME: str
-    AWS_REGION: str
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
+    AWS_BUCKET_NAME: str = ""
+    AWS_REGION: str = ""
 
-    TESSERACT_CMD: str
-    SMTP_HOST: str
-    SMTP_PORT: int
-    SMTP_USER: str
-    SMTP_PASSWORD: str
-    EMAIL_FROM: str
+    TESSERACT_CMD: str = ""
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    EMAIL_FROM: str = ""
 
-    API_KEY: str
+    API_KEY: str = ""
 
     # Old Meta fields can stay. They will not break anything.
     WHATSAPP_API_TOKEN: str = ""
@@ -43,8 +41,12 @@ class Settings(BaseSettings):
     WHATSAPP_GATEWAY_BASE: str = "http://127.0.0.1:8000/api/v1"
     WHATSAPP_WEBHOOK_KEY: str = ""
 
+    APP_BASE_URL: str = "http://localhost:8000"
+    FRONTEND_URL: str = "http://localhost:5173"
+
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 
 @lru_cache()
@@ -53,4 +55,5 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
-genai.configure(api_key=settings.API_KEY)
+if settings.API_KEY:
+    genai.configure(api_key=settings.API_KEY)

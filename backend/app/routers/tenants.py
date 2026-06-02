@@ -16,7 +16,7 @@ class TenantCreate(BaseModel):
     slug: str
     custom_domain: str | None = None
     subscription_plan: str = "Free Trial"
-    
+
 class TenantOut(BaseModel):
     id: int
     name: str
@@ -31,7 +31,7 @@ class TenantOut(BaseModel):
     storage_used_mb: float
     is_active: bool
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -51,7 +51,7 @@ def create_tenant(
     existing = db.query(Tenant).filter(Tenant.slug == payload.slug).first()
     if existing:
         raise HTTPException(status_code=400, detail="Tenant slug already exists")
-        
+
     tenant = Tenant(
         name=payload.name,
         slug=payload.slug,
@@ -71,13 +71,13 @@ def get_tenant(
 ):
     if current_user.role != "platform_super_admin" and getattr(current_user, "active_tenant_id", None) != tenant_id:
         raise HTTPException(status_code=403, detail="Not authorized to access this tenant")
-        
+
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
-        
+
     return tenant
-    
+
 @router.patch("/{tenant_id}")
 def update_tenant(
     tenant_id: int,
@@ -87,14 +87,14 @@ def update_tenant(
 ):
     if current_user.role != "platform_super_admin" and getattr(current_user, "active_tenant_id", None) != tenant_id:
          raise HTTPException(status_code=403, detail="Not authorized")
-         
+
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
-        
+
     for key, value in payload.items():
         if hasattr(tenant, key):
             setattr(tenant, key, value)
-            
+
     db.commit()
     return {"message": "Tenant updated successfully"}
