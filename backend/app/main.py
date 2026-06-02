@@ -9,7 +9,6 @@ from pathlib import Path
 from app.core.database import Base, engine
 from app.core.middleware import LoggingMiddleware
 from app.routers import auth, users, students, documents, applications, services, dashboard, chat, admin,notes,student_enquiry
-from app.routers.student_self import router as student_self_router
 from app.routers.admin import router as admin_config_router
 from app.routers import notes   # adjust path to match your project structure
 from app.routers import student_notes
@@ -23,6 +22,7 @@ from app.routers import whatsapp as whatsapp_router
 from app.routers import public
 from app.routers import tenants
 from app.routers import admin_settings
+from app.routers import platform
 
 
 
@@ -70,7 +70,6 @@ app.include_router(applications.router)
 app.include_router(services.router)
 app.include_router(dashboard.router)
 app.include_router(chat.router)
-app.include_router(student_self_router)
 app.include_router(admin_config_router)
 app.include_router(notes.router)   # ✅ notes registered here, after app is created
 app.include_router(applications.uni_router)
@@ -83,6 +82,7 @@ app.include_router(whatsapp_router.router)
 app.include_router(public.router)
 app.include_router(tenants.router)
 app.include_router(admin_settings.router)
+app.include_router(platform.router)
 
 # ─── Static file serving for uploads ─────────────────────────────────────────
 app.mount("/uploads", StaticFiles(directory="./uploads"), name="uploads")

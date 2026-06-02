@@ -36,9 +36,9 @@ invoice_pdf = Column(LargeBinary, nullable=True)
 
 class UserRole(str, enum.Enum):
     platform_super_admin = "platform_super_admin"
+    platform_support = "platform_support"
     admin = "admin"
     counsellor = "counsellor"
-    student = "student"
 
 
 class LeadStatus(str, enum.Enum):
@@ -238,12 +238,9 @@ class Student(Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     branch_id = Column(Integer, ForeignKey("branches.id"), nullable=True, index=True)
 
-    # ── Auth ──
-    email = Column(String(255), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(255), nullable=False)
-    letzstudy_email = Column(String(255), unique=True, index=True, nullable=False)
+    # ── Identity ──
+    email = Column(String(255), index=True, nullable=False)
     is_active = Column(Boolean, default=True)
-    must_change_password = Column(Boolean, default=True)
     highest_education = Column(
         Enum(HighestEducation, name="highesteducation"),
         nullable=True,
@@ -622,6 +619,7 @@ class Notification(Base):
     __tablename__ = "notification"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     student_id = Column(Integer)
     application_id = Column(Integer)  # ✅ ADD THIS
     message = Column(Text)

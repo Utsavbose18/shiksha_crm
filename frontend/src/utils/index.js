@@ -40,15 +40,11 @@ export const NAV_BY_ROLE = {
     { key: 'finance',      label: 'Finance',      icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
     { key: 'profile',      label: 'Profile',      icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
   ],
-  student: [
-    { key: 'myinfo',      label: 'My Info',       icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
-    { key: 'applications', label: 'My Applications', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-  ],
 };
 
 
 export const storage = {
-  get token()   { return localStorage.getItem('crm_access_token') || ''; },
+  get token()   { return sessionStorage.getItem('crm_impersonate_token') || localStorage.getItem('crm_access_token') || ''; },
   set token(v)  { localStorage.setItem('crm_access_token', v || ''); },
   get refresh() { return localStorage.getItem('crm_refresh_token') || ''; },
   set refresh(v){ localStorage.setItem('crm_refresh_token', v || ''); },
@@ -56,7 +52,11 @@ export const storage = {
   set role(v)   { localStorage.setItem('crm_role', v || ''); },
   get name()    { return localStorage.getItem('crm_full_name') || ''; },
   set name(v)   { localStorage.setItem('crm_full_name', v || ''); },
-  clear() { ['crm_access_token','crm_refresh_token','crm_role','crm_full_name'].forEach(k => localStorage.removeItem(k)); },
+  clear() {
+      ['crm_access_token','crm_refresh_token','crm_role','crm_full_name'].forEach(k => localStorage.removeItem(k));
+      sessionStorage.removeItem('crm_impersonate_token');
+      sessionStorage.removeItem('crm_impersonate_name');
+  },
 };
 
 export function formatLabel(value) {
