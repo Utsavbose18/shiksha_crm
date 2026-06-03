@@ -12,7 +12,7 @@ from app.schemas.schemas import UserCreate, UserUpdate, UserOut, PasswordResetBy
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
-admin_only = require_roles(UserRole.admin)
+admin_only = require_roles(UserRole.platform_super_admin, UserRole.admin)
 
 
 @router.post("/", response_model=UserOut, status_code=201)

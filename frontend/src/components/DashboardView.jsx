@@ -2,7 +2,7 @@ import { StatCard, SectionCard } from './UI';
 import { Badge } from './UI';
 import { formatCurrency, formatDateTime, formatLabel } from '../utils';
 import React from 'react';
-import { apiFetch } from '../utils';
+import { apiFetch, storage } from '../utils';
 import BirthdayCard from './birthdaywish';
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -277,6 +277,10 @@ export default function DashboardView({
 
   // ── Notification fetch & merge ────────────────────────────────────────────
   const fetchNotifications = React.useCallback(async () => {
+    if (!storage.token) {
+      setNotifications([]);
+      return;
+    }
     try {
       const data = await apiFetch('/api/notifications');
       const incoming = Array.isArray(data) ? data : [];

@@ -92,6 +92,7 @@ function clearOpenStudentModal() {
 // Views that are only valid for specific roles — used to validate the saved view
 // on refresh so we never restore a view the current role can't access.
 const ROLE_ALLOWED_VIEWS = {
+  platform_super_admin: new Set(['tenants','users','profile','change_password']),
   admin:      new Set(['dashboard','students','applications','users','universities','additional_settings','notes','student_enquiry','finance','profile','change_password','whatsapp']),
   counsellor: new Set(['dashboard','students','applications','notes','student_enquiry','finance','profile','change_password','whatsapp']),
   student:    new Set(['profile','applications','myinfo','change_password']),
@@ -100,6 +101,7 @@ const ROLE_ALLOWED_VIEWS = {
 function resolveInitialView(role, mustChangePassword, savedView) {
   if (mustChangePassword) return 'change_password';
   if (savedView && ROLE_ALLOWED_VIEWS[role]?.has(savedView)) return savedView;
+  if (role === 'platform_super_admin') return 'tenants';
   return 'dashboard';
 }
 
@@ -179,15 +181,22 @@ function App({ showLoginOnly }) {
     setLoginError('');
     try {
       const data = await api.login(credentials);
+      storage.token = data.access_token;
+      storage.refresh = data.refresh_token;
+      storage.role = data.role;
+      storage.name = data.full_name;
+      localStorage.setItem('must_change_password', String(Boolean(data.must_change_password)));
+
       setAuth({
         token: data.access_token,
+        accessToken: data.access_token,
         role: data.role,
         userId: data.user_id,
         fullName: data.full_name,
         tenantId: data.tenant_id
       });
       setMustChangePassword(data.must_change_password);
-      setActiveView('dashboard');
+      setActiveView(data.role === 'platform_super_admin' ? 'tenants' : 'dashboard');
       if (showLoginOnly) navigate('/app');
     } catch (err) {
       setLoginError(err.message || 'Login failed');
@@ -332,6 +341,10 @@ function App({ showLoginOnly }) {
           await loadProfile();
           return;
         }
+        if (auth.role === 'platform_super_admin') {
+          await Promise.all([loadUsers(), loadProfile()]);
+          return;
+        }
         if (auth.role !== 'student') {
           await Promise.all([loadStudents(), loadUniversities(), loadProfile()]);
           if (auth.role === 'admin') {
@@ -359,7 +372,7 @@ function App({ showLoginOnly }) {
     const loaders = {
       dashboard:           loadDashboard,
       students:            loadStudents,
-      users:               auth.role === 'admin' ? loadUsers : null,
+      users:               ['admin', 'platform_super_admin'].includes(auth.role) ? loadUsers : null,
       universities:        loadUniversities,
       applications:        loadApplications,
       services:            loadServices,
