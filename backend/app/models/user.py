@@ -39,6 +39,7 @@ class UserRole(str, enum.Enum):
     platform_support = "platform_support"
     admin = "admin"
     counsellor = "counsellor"
+    student = "student"
 
 
 class LeadStatus(str, enum.Enum):

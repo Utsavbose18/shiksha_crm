@@ -103,20 +103,9 @@ def login(
         if not user.is_active:
             raise HTTPException(status_code=403, detail="Account not activated")
 
-        # Basic role from User model
-        role = user.role
-
-        # Override role with RBAC mapping if a tenant is selected
-        if tenant_id_to_use and role != "platform_super_admin":
-            from app.models.rbac import UserRoleMapping, Role
-            mapping = db.query(UserRoleMapping).filter(
-                UserRoleMapping.user_id == user.id,
-                UserRoleMapping.tenant_id == tenant_id_to_use
-            ).first()
-            if mapping:
-                role_obj = db.query(Role).filter(Role.id == mapping.role_id).first()
-                if role_obj:
-                    role = role_obj.name
+        # Keep the application role stable for the frontend and route guards.
+        # RBAC permissions are checked separately via UserRoleMapping.
+        role = user.role.value if hasattr(user.role, "value") else user.role
 
         return _make_tokens(
             user.id,

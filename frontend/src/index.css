@@ -4,6 +4,7 @@ html {
 
 body {
   min-width: 320px;
+  margin: 0;
 }
 
 a {
@@ -12,13 +13,4 @@ a {
 
 #root {
   min-height: 100vh;
-}
-
-/* Project-wide font override: force Times New Roman everywhere, beating
-   inline `fontFamily` strings in JSX (which would otherwise outrank a CSS
-   selector). Covers buttons, inputs, selects, code, and pseudo-elements. */
-*,
-*::before,
-*::after {
-  font-family: 'Times New Roman', Times, serif !important;
 }

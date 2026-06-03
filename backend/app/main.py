@@ -22,7 +22,6 @@ from app.routers import whatsapp as whatsapp_router
 from app.routers import public
 from app.routers import tenants
 from app.routers import admin_settings
-from app.routers import platform
 
 
 
@@ -82,7 +81,6 @@ app.include_router(whatsapp_router.router)
 app.include_router(public.router)
 app.include_router(tenants.router)
 app.include_router(admin_settings.router)
-app.include_router(platform.router)
 
 # ─── Static file serving for uploads ─────────────────────────────────────────
 app.mount("/uploads", StaticFiles(directory="./uploads"), name="uploads")
