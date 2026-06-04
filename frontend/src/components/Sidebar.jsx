@@ -2,17 +2,33 @@ import { NavIcon } from './UI';
 import { NAV_BY_ROLE, formatLabel } from '../utils';
 
 export default function Sidebar({ auth, activeView, setActiveView, logout,  students,
-  profile,  setOpenedStudentId }) {
+  profile,  setOpenedStudentId, collapsed = false, onToggleCollapse }) {
   const navItems = NAV_BY_ROLE[auth.role] || [];
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''}`}>
       <div className="sidebar-brand">
         <div className="brand-mark">LS</div>
         <div className="brand-text">
           <span className="brand-name">{auth.role === "platform_super_admin" ? "SaaS Platform" : "EduCRM"}</span>
           <span className="brand-sub">{auth.role === 'platform_super_admin' ? 'Admin' : 'CRM'}</span>
         </div>
+        <button
+          type="button"
+          className="sidebar-toggle"
+          onClick={onToggleCollapse}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-expanded={!collapsed}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            {collapsed ? (
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 6l6 6-6 6" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 6l-6 6 6 6" />
+            )}
+          </svg>
+        </button>
       </div>
 
       <div className="sidebar-section-label">Navigation</div>

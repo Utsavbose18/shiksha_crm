@@ -39,11 +39,12 @@ function MultiTenantLogin({ onLogin, error: externalError, loading: externalLoad
       return;
     }
 
-    // For super admin, we might bypass tenant selection, but let's pass it anyway
+    const isPlatformLogin = !selectedTenantSlug || email.toLowerCase().includes('superadmin');
+
     onLogin({
       username: email,
       password,
-      client_id: selectedTenantSlug // Using client_id field from OAuth2 spec for tenant_slug
+      client_id: isPlatformLogin ? '' : selectedTenantSlug
     });
   };
 

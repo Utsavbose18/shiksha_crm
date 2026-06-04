@@ -51,8 +51,10 @@ export const storage = {
   set role(v)   { localStorage.setItem('crm_role', v || ''); },
   get name()    { return localStorage.getItem('crm_full_name') || ''; },
   set name(v)   { localStorage.setItem('crm_full_name', v || ''); },
+  get tenantId(){ return localStorage.getItem('crm_tenant_id') || ''; },
+  set tenantId(v){ v ? localStorage.setItem('crm_tenant_id', String(v)) : localStorage.removeItem('crm_tenant_id'); },
   clear() {
-      ['crm_access_token','crm_refresh_token','crm_role','crm_full_name'].forEach(k => localStorage.removeItem(k));
+      ['crm_access_token','crm_refresh_token','crm_role','crm_full_name','crm_tenant_id'].forEach(k => localStorage.removeItem(k));
       sessionStorage.removeItem('crm_impersonate_token');
       sessionStorage.removeItem('crm_impersonate_name');
   },
@@ -120,6 +122,7 @@ export async function apiFetch(path, options = {}) {
       const rd = await rr.json();
       storage.token = rd.access_token; storage.refresh = rd.refresh_token;
       storage.role = rd.role; storage.name = rd.full_name;
+      storage.tenantId = rd.tenant_id;
       headers.set('Authorization', `Bearer ${storage.token}`);
       response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
     } else {

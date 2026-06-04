@@ -59,13 +59,35 @@ def login(
     email = form_data.username
     password = form_data.password
 
+    platform_user = db.query(User).filter(
+        User.email == email,
+        User.tenant_id.is_(None),
+    ).first()
+    if platform_user:
+        if not verify_password(password, platform_user.hashed_password):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        if not platform_user.is_active:
+            raise HTTPException(status_code=403, detail="Account not activated")
+
+        role = platform_user.role.value if hasattr(platform_user.role, "value") else platform_user.role
+        return _make_tokens(
+            platform_user.id,
+            role,
+            platform_user.full_name,
+            getattr(platform_user, "must_change_password", False),
+            None
+        )
+
     # Determine user and tenant
     tenant_id_to_use = None
     if form_data.client_id:
         from app.models.tenant import Tenant
-        tenant = db.query(Tenant).filter(Tenant.slug == form_data.client_id).first()
+        tenant = db.query(Tenant).filter(
+            Tenant.slug == form_data.client_id,
+            Tenant.is_active == True,
+        ).first()
         if not tenant:
-            raise HTTPException(status_code=400, detail="Invalid tenant")
+            raise HTTPException(status_code=400, detail="Invalid or inactive tenant")
         tenant_id_to_use = tenant.id
 
     # 1️⃣ Student login (requires tenant)

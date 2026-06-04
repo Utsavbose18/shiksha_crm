@@ -3,7 +3,6 @@ import './App.css';
 import React from 'react';
 import { storage, apiFetch, NAV_BY_ROLE, api } from './utils';
 import Sidebar from './components/Sidebar';
-import LoginScreen from './components/LoginScreen';
 import StaffLogin from './pages/public/StaffLogin';
 import { useNavigate } from 'react-router-dom';
 import DashboardView from './components/DashboardView';
@@ -49,6 +48,7 @@ class ErrorBoundary extends React.Component {
 // ── Persisted active-view helpers ─────────────────────────────────────────────
 const ACTIVE_VIEW_KEY = 'crm_active_view';
 const OPEN_STUDENT_MODAL_KEY = 'crm_open_student_modal';
+const SIDEBAR_COLLAPSED_KEY = 'crm_sidebar_collapsed';
 
 function saveActiveView(view) {
   try { localStorage.setItem(ACTIVE_VIEW_KEY, view); } catch {}
@@ -89,6 +89,10 @@ function clearOpenStudentModal() {
   try { localStorage.removeItem(OPEN_STUDENT_MODAL_KEY); } catch {}
 }
 
+function loadSidebarCollapsed() {
+  try { return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true'; } catch { return false; }
+}
+
 // Views that are only valid for specific roles — used to validate the saved view
 // on refresh so we never restore a view the current role can't access.
 const ROLE_ALLOWED_VIEWS = {
@@ -119,6 +123,7 @@ function App({ showLoginOnly }) {
   const [mustChangePassword, setMustChangePassword] = useState(
     localStorage.getItem('must_change_password') === 'true'
   );
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebarCollapsed);
 
   const [activeView, setActiveViewRaw] = useState(() => {
     const must = localStorage.getItem('must_change_password') === 'true';
@@ -135,6 +140,14 @@ function App({ showLoginOnly }) {
     saveActiveView(view);
   };
 
+  const toggleSidebar = () => {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next)); } catch {}
+      return next;
+    });
+  };
+
   const [loading, setLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [globalError, setGlobalError] = useState('');
@@ -148,7 +161,6 @@ function App({ showLoginOnly }) {
   const [universities, setUniversities] = useState([]);
   const [applications, setApplications] = useState([]);
   const [customFields, setCustomFields] = useState([]);
-  const [services, setServices] = useState([]);
   const [profile, setProfile] = useState(null);
 
   // Selection state
@@ -185,6 +197,7 @@ function App({ showLoginOnly }) {
       storage.refresh = data.refresh_token;
       storage.role = data.role;
       storage.name = data.full_name;
+      storage.tenantId = data.tenant_id;
       localStorage.setItem('must_change_password', String(Boolean(data.must_change_password)));
 
       setAuth({
@@ -217,7 +230,6 @@ function App({ showLoginOnly }) {
     setUsers([]);
     setUniversities([]);
     setApplications([]);
-    setServices([]);
     setProfile(null);
     setSelectedStudentId('');
     setSelectedApplicationId('');
@@ -244,11 +256,16 @@ function App({ showLoginOnly }) {
 
   // ── Data loaders ──────────────────────────────────────────────────────────
   async function loadDashboard() {
-    const [d, rs, ra] = await Promise.all([
-      apiFetch('/api/dashboard/'),
+    const d = await apiFetch('/api/dashboard/');
+    setDashboard(d);
+
+    const [recentStudentsResult, recentApplicationsResult] = await Promise.allSettled([
       apiFetch('/api/dashboard/students/recent'),
       apiFetch('/api/dashboard/applications/recent'),
     ]);
+
+    const rs = recentStudentsResult.status === 'fulfilled' ? recentStudentsResult.value : [];
+    const ra = recentApplicationsResult.status === 'fulfilled' ? recentApplicationsResult.value : [];
 
     const studentIds = [...new Set((ra || []).map((item) => item.student_id).filter(Boolean))];
 
@@ -281,7 +298,6 @@ function App({ showLoginOnly }) {
         : item;
     });
 
-    setDashboard(d);
     setRecentStudents(rs || []);
     setRecentApplications(enrichedRecentApplications);
   }
@@ -314,12 +330,6 @@ function App({ showLoginOnly }) {
     if (!selectedApplicationId && data?.length) setSelectedApplicationId(String(data[0].id));
   }
 
-  async function loadServices() {
-    const q = selectedStudentId && auth.role !== 'student' ? `?student_id=${selectedStudentId}` : '';
-    const data = await apiFetch(`/api/services/${q}`);
-    setServices(data || []);
-  }
-
   async function loadProfile() {
     const endpoint = auth.role === 'student' ? '/api/me/profile' : '/api/auth/me';
     const data = await apiFetch(endpoint);
@@ -342,13 +352,13 @@ function App({ showLoginOnly }) {
           return;
         }
         if (auth.role === 'platform_super_admin') {
-          await Promise.all([loadUsers(), loadProfile()]);
+          await Promise.allSettled([loadUsers(), loadProfile()]);
           return;
         }
         if (auth.role !== 'student') {
-          await Promise.all([loadStudents(), loadUniversities(), loadProfile()]);
+          await Promise.allSettled([loadStudents(), loadUniversities(), loadProfile()]);
           if (auth.role === 'admin') {
-            await Promise.all([loadUsers(), loadCustomFields()]);
+            await Promise.allSettled([loadUsers(), loadCustomFields()]);
           }
           await loadDashboard();
         } else {
@@ -375,7 +385,6 @@ function App({ showLoginOnly }) {
       users:               ['admin', 'platform_super_admin'].includes(auth.role) ? loadUsers : null,
       universities:        loadUniversities,
       applications:        loadApplications,
-      services:            loadServices,
       profile:             loadProfile,
       additional_settings: auth.role === 'admin' ? loadCustomFields : null,
       notes:               ['admin', 'counsellor'].includes(auth.role) ? async () => {} : null,
@@ -504,17 +513,6 @@ function App({ showLoginOnly }) {
           />
         );
 
-      case 'services':
-        return (
-          <ServicesView
-            services={services}
-            students={students}
-            selectedStudentId={selectedStudentId}
-            onRefresh={loadServices}
-            setGlobalError={setGlobalError}
-          />
-        );
-
       case 'users':
         return <UsersView users={users} onRefresh={loadUsers} setGlobalError={setGlobalError} />;
 
@@ -563,12 +561,14 @@ function App({ showLoginOnly }) {
   const currentNav = navItems.find(n => n.key === activeView);
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${sidebarCollapsed ? 'sidebar-is-collapsed' : ''}`}>
       <Sidebar
         auth={auth}
         activeView={activeView}
         setActiveView={setActiveView}
         logout={logout}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
         students={students}
         profile={profile}
         setOpenedStudentId={id => {

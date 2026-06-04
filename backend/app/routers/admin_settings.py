@@ -1,15 +1,73 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_permissions
+from app.models.branch import Branch
 from app.models.rbac import Role, Permission, RolePermission
-from app.models.custom_field import CustomField
 from app.models.workflow import Workflow, WorkflowStage
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/admin/settings", tags=["Admin Settings"])
+
+
+# --- Branches ---
+
+class BranchCreate(BaseModel):
+    name: str
+    address: str | None = None
+    city: str | None = None
+    state: str | None = None
+    country: str | None = None
+    phone: str | None = None
+    email: str | None = None
+
+
+class BranchOut(BranchCreate):
+    id: int
+    tenant_id: int
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+def _require_tenant_admin(current_user):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Tenant admin required")
+    tenant_id = getattr(current_user, "active_tenant_id", None)
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant context required")
+    return tenant_id
+
+
+@router.post("/branches", response_model=BranchOut, status_code=201)
+def create_branch(
+    payload: BranchCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    tenant_id = _require_tenant_admin(current_user)
+    branch = Branch(tenant_id=tenant_id, **payload.model_dump())
+    db.add(branch)
+    db.commit()
+    db.refresh(branch)
+    return branch
+
+
+@router.get("/branches", response_model=List[BranchOut])
+def list_branches(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    tenant_id = _require_tenant_admin(current_user)
+    return (
+        db.query(Branch)
+        .filter(Branch.tenant_id == tenant_id, Branch.is_active == True)
+        .order_by(Branch.name.asc())
+        .all()
+    )
 
 
 # --- Roles & Permissions ---
@@ -51,54 +109,6 @@ def list_roles(
 ):
     tenant_id = getattr(current_user, "active_tenant_id", None)
     return db.query(Role).filter(Role.tenant_id == tenant_id).all()
-
-
-# --- Custom Fields ---
-
-class CustomFieldCreate(BaseModel):
-    module_name: str
-    field_label: str
-    field_key: str
-    field_type: str
-    is_required: bool = False
-    options_json: dict | list | None = None
-
-
-@router.post("/custom-fields")
-def create_custom_field(
-    payload: CustomFieldCreate,
-    db: Session = Depends(get_db),
-    current_user=Depends(require_permissions("manage_custom_fields")),
-):
-    tenant_id = current_user.active_tenant_id
-    field = CustomField(
-        tenant_id=tenant_id,
-        module_name=payload.module_name,
-        field_label=payload.field_label,
-        field_key=payload.field_key,
-        field_type=payload.field_type,
-        is_required=payload.is_required,
-        options_json=payload.options_json,
-    )
-    db.add(field)
-    db.commit()
-    return field
-
-
-@router.get("/custom-fields")
-def list_custom_fields(
-    module_name: str = None,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    tenant_id = getattr(current_user, "active_tenant_id", None)
-    q = db.query(CustomField).filter(
-        CustomField.tenant_id == tenant_id,
-        CustomField.is_active == True,
-    )
-    if module_name:
-        q = q.filter(CustomField.module_name == module_name)
-    return q.all()
 
 
 # --- Workflows ---

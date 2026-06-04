@@ -15,6 +15,14 @@ router = APIRouter(prefix="/api/users", tags=["Users"])
 admin_only = require_roles(UserRole.platform_super_admin, UserRole.admin)
 
 
+def _assert_user_visible(user: User, current_user: User) -> None:
+    if current_user.role == "platform_super_admin":
+        return
+    tenant_id = getattr(current_user, "active_tenant_id", None)
+    if not tenant_id or user.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="User not found")
+
+
 @router.post("/", response_model=UserOut, status_code=201)
 def create_user(
     payload: UserCreate,
@@ -25,12 +33,19 @@ def create_user(
     if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    tenant_id = None
+    if current_user.role != "platform_super_admin":
+        tenant_id = getattr(current_user, "active_tenant_id", None)
+        if not tenant_id:
+            raise HTTPException(status_code=403, detail="No active tenant context")
+
     user = User(
         email=payload.email,
         hashed_password=hash_password(payload.password),
         full_name=payload.full_name,
         phone=payload.phone,
         role=payload.role,
+        tenant_id=tenant_id,
         is_active=True,
         must_change_password=True,   # ✅ FORCE PASSWORD CHANGE
         created_by=current_user.id,
@@ -64,11 +79,12 @@ def list_users(
 def get_user(
     user_id: int,
     db: Session = Depends(get_db),
-    _=Depends(admin_only),
+    current_user: User = Depends(admin_only),
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    _assert_user_visible(user, current_user)
     return user
 
 
@@ -77,11 +93,12 @@ def update_user(
     user_id: int,
     payload: UserUpdate,
     db: Session = Depends(get_db),
-    _=Depends(admin_only),
+    current_user: User = Depends(admin_only),
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    _assert_user_visible(user, current_user)
     for field, val in payload.model_dump(exclude_unset=True).items():
         setattr(user, field, val)
     db.commit()
@@ -90,20 +107,22 @@ def update_user(
 
 
 @router.post("/{user_id}/activate")
-def activate_user(user_id: int, db: Session = Depends(get_db), _=Depends(admin_only)):
+def activate_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(admin_only)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    _assert_user_visible(user, current_user)
     user.is_active = True
     db.commit()
     return {"message": "User activated"}
 
 
 @router.post("/{user_id}/deactivate")
-def deactivate_user(user_id: int, db: Session = Depends(get_db), _=Depends(admin_only)):
+def deactivate_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(admin_only)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    _assert_user_visible(user, current_user)
     user.is_active = False
     db.commit()
     return {"message": "User deactivated"}
@@ -114,11 +133,12 @@ def reset_password(
     user_id: int,
     payload: PasswordResetByAdmin,
     db: Session = Depends(get_db),
-    _=Depends(admin_only),
+    current_user: User = Depends(admin_only),
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    _assert_user_visible(user, current_user)
 
     user.hashed_password = hash_password(payload.new_password)
 
@@ -132,11 +152,12 @@ def reset_password(
 from datetime import datetime
 
 @router.delete("/{user_id}", status_code=204)
-def delete_user(user_id: int, db: Session = Depends(get_db), _=Depends(admin_only)):
+def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(admin_only)):
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    _assert_user_visible(user, current_user)
 
     try:
         # NULLIFY references (safer than delete)

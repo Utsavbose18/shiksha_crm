@@ -1,28 +1,33 @@
-"""
-Main FastAPI application entry point.
-"""
+"""Main FastAPI application entry point."""
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
-from app.core.database import Base, engine
+from app.core.config import settings
 from app.core.middleware import LoggingMiddleware
-from app.routers import auth, users, students, documents, applications, services, dashboard, chat, admin,notes,student_enquiry
+from app.routers import (
+    admin_settings,
+    applications,
+    auth,
+    chat,
+    country_templates,
+    dashboard,
+    documents,
+    me,
+    notes,
+    public,
+    services,
+    student_enquiry,
+    student_notes,
+    students,
+    tenants,
+    users,
+    whatsapp as whatsapp_router,
+)
 from app.routers.admin import router as admin_config_router
-from app.routers import notes   # adjust path to match your project structure
-from app.routers import student_notes
-from app.routers import country_templates
-# Create all tables (idempotent; prefer Alembic for production migrations)
-Base.metadata.create_all(bind=engine)
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-from fastapi import FastAPI
-from app.routers import whatsapp as whatsapp_router
-from app.routers import public
-from app.routers import tenants
-from app.routers import admin_settings
-
 
 
 
@@ -54,7 +59,7 @@ app = FastAPI(
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],      # Restrict to your frontend domain in production
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -62,6 +67,7 @@ app.add_middleware(
 
 # ─── Routers ──────────────────────────────────────────────────────────────────
 app.include_router(auth.router)
+app.include_router(me.router)
 app.include_router(users.router)
 app.include_router(students.router)
 app.include_router(documents.router)
@@ -97,9 +103,6 @@ async def validation_exception_handler(request, exc):
 @app.get("/health", tags=["Health"])
 def health():
     return {"status": "ok", "version": "1.0.0"}
-
-from fastapi.responses import FileResponse
-import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 BUILD_DIR = BASE_DIR / "build"

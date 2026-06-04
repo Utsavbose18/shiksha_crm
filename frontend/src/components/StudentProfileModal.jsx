@@ -1647,7 +1647,7 @@ export function StudentProfileModal({
     setExtracting(sectionId); showToast('Reading document with AI…', 'info');
     try {
       let extracted = preExtracted;
-      if (!extracted) { const formData = new FormData(); formData.append('file', file); formData.append('section_id', sectionId); const res = await apiFetch('/api/ai/extract-student-fields', { method: 'POST', body: formData }); extracted = res; }
+      if (!extracted) { showToast('AI extraction is not configured for this workspace yet.', 'warning'); return; }
       if (!extracted) return;
       const fieldMap = { passport: { passport_number: 'passport_number', issue_date: 'passport_issue_date', expiry_date: 'passport_expiry', issue_country: 'passport_issue_country', city_of_birth: 'city_of_birth', country_of_birth: 'country_of_birth', date_of_birth: 'date_of_birth', nationality: 'nationality' } };
       const map = fieldMap[sectionId] || {};

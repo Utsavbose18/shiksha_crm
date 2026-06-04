@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { apiFetch } from '../utils';
+import { apiFetch, storage } from '../utils';
+
+function generateTempPassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+  const bytes = new Uint32Array(14);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, value => chars[value % chars.length]).join('');
+}
 
 export default function SetupWizard({ onComplete }) {
   const [step, setStep] = useState(1);
@@ -28,12 +35,15 @@ export default function SetupWizard({ onComplete }) {
     setLoading(true);
     setError('');
     try {
-      const auth = await import('../utils').then(m => m.storage);
-      const tenantId = auth.tenant_id; // need to fetch current tenant id or use patch directly if backend infers
-      // ... actually, we'll patch using /api/tenants/me or /api/tenants/{tenantId}
-      // Assuming backend infers or we can send it in PATCH. For now, a simplified save.
-      // PATCH /api/tenants/... logic here
-      // For brevity, pretending it succeeds
+      if (storage.tenantId) {
+        await apiFetch(`/api/tenants/${storage.tenantId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            primary_color: primaryColor,
+            secondary_color: secondaryColor,
+          }),
+        });
+      }
       nextStep();
     } catch (err) {
       setError(err.message);
@@ -64,15 +74,15 @@ export default function SetupWizard({ onComplete }) {
     setLoading(true);
     setError('');
     try {
-      const res = await apiFetch('/api/users/', {
+      const password = generateTempPassword();
+      await apiFetch('/api/users/', {
         method: 'POST',
-        body: JSON.stringify(staff)
+        body: JSON.stringify({
+          ...staff,
+          password,
+        })
       });
-      if (res.temp_password) {
-        setTempPassword(res.temp_password);
-      } else {
-        nextStep();
-      }
+      setTempPassword(password);
     } catch (err) {
       setError(err.message);
     } finally {

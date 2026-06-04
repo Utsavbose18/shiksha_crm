@@ -128,25 +128,11 @@ async function downloadInvoicePDF(paymentId, setError) {
 function InvoiceButton({ payment, students, setGlobalError }) {
   const [loading, setLoading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
-  const [sending, setSending] = useState(false);
 
   async function handleDownload() {
     setLoading(true);
     await downloadInvoicePDF(payment.id, setGlobalError);
     setLoading(false);
-  }
-
-  async function handleSend() {
-    setSending(true);
-    try {
-        const res = await apiFetch(`/api/payments/${payment.id}/send-invoice`, { method: 'POST' });
-        alert(res.message || 'Invoice sent successfully');
-        setShowPreview(false);
-    } catch(err) {
-        setGlobalError?.(err.message || "Failed to send invoice");
-    } finally {
-        setSending(false);
-    }
   }
 
   const studentName = payment.manual_student_name || (() => {
@@ -190,12 +176,6 @@ function InvoiceButton({ payment, students, setGlobalError }) {
                {payment.reference && <div><strong>Reference:</strong> {payment.reference}</div>}
              </div>
              <div className="flex gap-2 justify-end">
-                <button
-                  onClick={handleSend} disabled={sending}
-                  className="bg-white border text-blue-600 px-4 py-2 rounded text-sm font-semibold hover:bg-blue-50 transition"
-                >
-                  {sending ? 'Sending...' : '✉️ Send to Email'}
-                </button>
                 <button
                   onClick={handleDownload} disabled={loading}
                   className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-semibold hover:bg-blue-700 transition"
