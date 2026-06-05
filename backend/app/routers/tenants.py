@@ -1,11 +1,12 @@
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.core.database import get_db
+from app.core.audit_logger import log_action
 from app.core.security import get_current_user, hash_password, require_roles
 from app.models.tenant import Tenant
 from app.models.user import User, UserRole
@@ -105,6 +106,7 @@ def get_all_tenants(
 @router.post("/", response_model=TenantOut)
 def create_tenant(
     payload: TenantCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user = Depends(require_roles("platform_super_admin"))
 ):
@@ -143,6 +145,18 @@ def create_tenant(
         raise
 
     db.refresh(tenant)
+    log_action(
+        db=db,
+        user_id=current_user.id,
+        tenant_id=tenant.id,
+        action="tenant_created",
+        module_name="tenants",
+        record_type="tenant",
+        record_id=tenant.id,
+        new_values={"name": tenant.name, "slug": tenant.slug, "admin_email": tenant_admin.email},
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
     return tenant
 
 @router.get("/{tenant_id}", response_model=TenantOut)
@@ -186,6 +200,7 @@ def update_tenant(
 def set_tenant_status(
     tenant_id: int,
     payload: dict,
+    request: Request,
     db: Session = Depends(get_db),
     current_user = Depends(require_roles("platform_super_admin"))
 ):
@@ -205,6 +220,18 @@ def set_tenant_status(
 
     db.commit()
     db.refresh(tenant)
+    log_action(
+        db=db,
+        user_id=current_user.id,
+        tenant_id=tenant.id,
+        action="tenant_status_changed",
+        module_name="tenants",
+        record_type="tenant",
+        record_id=tenant.id,
+        new_values={"is_active": tenant.is_active, "subscription_status": tenant.subscription_status},
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
     return tenant
 
 
@@ -212,6 +239,7 @@ def set_tenant_status(
 def reset_tenant_credentials(
     tenant_id: int,
     payload: TenantCredentialReset,
+    request: Request,
     db: Session = Depends(get_db),
     current_user = Depends(require_roles("platform_super_admin"))
 ):
@@ -250,6 +278,18 @@ def reset_tenant_credentials(
         )
         db.add(admin_user)
         db.commit()
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            tenant_id=tenant.id,
+            action="tenant_credentials_reset",
+            module_name="tenants",
+            record_type="tenant",
+            record_id=tenant.id,
+            new_values={"admin_email": admin_user.email, "created_admin": True},
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
         return {
             "message": "Tenant admin credentials created successfully",
             "admin_email": admin_user.email,
@@ -261,6 +301,18 @@ def reset_tenant_credentials(
     admin_user.is_active = True
 
     db.commit()
+    log_action(
+        db=db,
+        user_id=current_user.id,
+        tenant_id=tenant.id,
+        action="tenant_credentials_reset",
+        module_name="tenants",
+        record_type="tenant",
+        record_id=tenant.id,
+        new_values={"admin_email": admin_user.email, "created_admin": False},
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
 
     return {
         "message": "Tenant credentials reset successfully",
@@ -272,6 +324,7 @@ def reset_tenant_credentials(
 @router.delete("/{tenant_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_tenant(
     tenant_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user = Depends(require_roles("platform_super_admin"))
 ):
@@ -290,4 +343,16 @@ def delete_tenant(
     )
 
     db.commit()
+    log_action(
+        db=db,
+        user_id=current_user.id,
+        tenant_id=tenant.id,
+        action="tenant_deleted",
+        module_name="tenants",
+        record_type="tenant",
+        record_id=tenant.id,
+        old_values={"name": tenant.name, "slug": tenant.slug},
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
     return None

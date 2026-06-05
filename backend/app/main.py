@@ -23,6 +23,7 @@ from app.routers import (
     student_enquiry,
     student_notes,
     students,
+    superadmin as superadmin_router,
     tenants,
     users,
     whatsapp as whatsapp_router,
@@ -86,6 +87,7 @@ app.include_router(country_templates.router)
 app.include_router(whatsapp_router.router)
 app.include_router(public.router)
 app.include_router(tenants.router)
+app.include_router(superadmin_router.router)
 app.include_router(admin_settings.router)
 
 # ─── Static file serving for uploads ─────────────────────────────────────────

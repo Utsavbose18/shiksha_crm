@@ -171,9 +171,8 @@ export default function StudentsView({
   const [search, setSearch]               = useState('');
   const [statusFilter, setStatusFilter]   = useState('');
   const [actionLoadingId, setActionLoadingId] = useState('');
-  const [changePwdStudent, setChangePwdStudent] = useState(null);
   const [form, setForm] = useState({
-    email: '', password: '', first_name: '', last_name: '', phone: '', counsellor_id: ''
+    email: '', first_name: '', last_name: '', phone: '', counsellor_id: ''
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -193,7 +192,7 @@ export default function StudentsView({
         }),
       });
       setShowForm(false);
-      setForm({ email: '', password: '', first_name: '', last_name: '', phone: '', counsellor_id: '' });
+      setForm({ email: '', first_name: '', last_name: '', phone: '', counsellor_id: '' });
       await onRefresh();
     } catch (err) {
       setGlobalError(err.message);
@@ -363,29 +362,6 @@ export default function StudentsView({
                     <td onClick={e => e.stopPropagation()} style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         <button
-                          title="Reset student password"
-                          onClick={() => setChangePwdStudent(student)}
-                          style={{
-                            background: 'var(--sap-brand-light)',
-                            border: '1px solid var(--sap-brand-mid)',
-                            borderRadius: 6,
-                            padding: '5px 9px',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 5,
-                            color: 'var(--sap-brand)',
-                            fontSize: 12,
-                            fontWeight: 600,
-                          }}
-                        >
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-                          </svg>
-                          Reset
-                        </button>
-
-                        <button
                           title="Delete student"
                           disabled={isLoading}
                           onClick={() => handleDeleteStudent(student)}
@@ -430,8 +406,6 @@ export default function StudentsView({
             <TextInput label="First Name"  value={form.first_name}  onChange={e => update('first_name', e.target.value)}  required />
             <TextInput label="Last Name"   value={form.last_name}   onChange={e => update('last_name', e.target.value)}   required />
             <TextInput label="Email" type="email" value={form.email} onChange={e => update('email', e.target.value)} required />
-            <TextInput label="Letzstudy Email" type="email" value={form.letzstudy_email} onChange={e => update('letzstudy_email', e.target.value)} required />
-            <TextInput label="Password" type="password" value={form.password} onChange={e => update('password', e.target.value)} required />
             <TextInput label="Phone" value={form.phone} onChange={e => update('phone', e.target.value)} />
             {auth.role === 'admin' && (
               <label className="field">
@@ -452,13 +426,6 @@ export default function StudentsView({
             </div>
           </form>
         </Modal>
-      )}
-
-      {changePwdStudent && (
-        <ChangePasswordModal
-          student={changePwdStudent}
-          onClose={() => setChangePwdStudent(null)}
-        />
       )}
 
     </div>

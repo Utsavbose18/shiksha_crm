@@ -4,6 +4,7 @@ import React from 'react';
 import { storage, apiFetch, NAV_BY_ROLE, api } from './utils';
 import Sidebar from './components/Sidebar';
 import StaffLogin from './pages/public/StaffLogin';
+import PlatformOpsCenter from './pages/superadmin/PlatformOpsCenter';
 import { useNavigate } from 'react-router-dom';
 import DashboardView from './components/DashboardView';
 import TenantsView from './components/TenantsView';
@@ -19,6 +20,7 @@ import NotesPage from './components/NotesPage';
 import { FinanceView } from './components/FinanceView';
 import StudentEnquiryPage from './components/Studentenquirypage';
 import WhatsAppQuickSend from './components/WhatsAppQuickSend';
+import ImpersonationBanner from './components/superadmin/ImpersonationBanner';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -96,16 +98,16 @@ function loadSidebarCollapsed() {
 // Views that are only valid for specific roles — used to validate the saved view
 // on refresh so we never restore a view the current role can't access.
 const ROLE_ALLOWED_VIEWS = {
-  platform_super_admin: new Set(['tenants','users','profile','change_password']),
+  platform_super_admin: new Set(['platform_ops','tenants','users','profile','change_password']),
   admin:      new Set(['dashboard','students','applications','users','universities','additional_settings','notes','student_enquiry','finance','profile','change_password','whatsapp']),
-  counsellor: new Set(['dashboard','students','applications','notes','student_enquiry','finance','profile','change_password','whatsapp']),
+  counsellor: new Set(['dashboard','students','applications','universities','notes','student_enquiry','finance','profile','change_password','whatsapp']),
   student:    new Set(['profile','applications','myinfo','change_password']),
 };
 
 function resolveInitialView(role, mustChangePassword, savedView) {
   if (mustChangePassword) return 'change_password';
   if (savedView && ROLE_ALLOWED_VIEWS[role]?.has(savedView)) return savedView;
-  if (role === 'platform_super_admin') return 'tenants';
+  if (role === 'platform_super_admin') return 'platform_ops';
   return 'dashboard';
 }
 
@@ -209,7 +211,7 @@ function App({ showLoginOnly }) {
         tenantId: data.tenant_id
       });
       setMustChangePassword(data.must_change_password);
-      setActiveView(data.role === 'platform_super_admin' ? 'tenants' : 'dashboard');
+      setActiveView(data.role === 'platform_super_admin' ? 'platform_ops' : 'dashboard');
       if (showLoginOnly) navigate('/app');
     } catch (err) {
       setLoginError(err.message || 'Login failed');
@@ -383,6 +385,7 @@ function App({ showLoginOnly }) {
       dashboard:           loadDashboard,
       students:            loadStudents,
       users:               ['admin', 'platform_super_admin'].includes(auth.role) ? loadUsers : null,
+      platform_ops:        auth.role === 'platform_super_admin' ? async () => {} : null,
       universities:        loadUniversities,
       applications:        loadApplications,
       profile:             loadProfile,
@@ -462,6 +465,11 @@ function App({ showLoginOnly }) {
             ? <TenantsView setGlobalError={setGlobalError} />
             : <div className="p-6 text-red-600 font-semibold">Access denied</div>;
 
+      case 'platform_ops':
+        return auth.role === 'platform_super_admin'
+            ? <PlatformOpsCenter />
+            : <div className="p-6 text-red-600 font-semibold">Access denied</div>;
+
       case 'dashboard':
         return (
           <DashboardView
@@ -506,6 +514,7 @@ function App({ showLoginOnly }) {
             selectedApplicationId={selectedApplicationId}
             setSelectedApplicationId={setSelectedApplicationId}
             onRefresh={loadApplications}
+            onUniversitiesRefresh={loadUniversities}
             setGlobalError={setGlobalError}
             onOpenStudent={id => {
               openStudentModal(id, { initialTab: 'applications' });
@@ -578,20 +587,7 @@ function App({ showLoginOnly }) {
       />
 
       <div className="main-area">
-        {sessionStorage.getItem('crm_impersonate_token') && (
-            <div className="bg-indigo-600 text-white text-sm py-2 px-4 flex justify-between items-center sticky top-0 z-50 shadow-md">
-                <span><strong>Impersonation Mode:</strong> You are viewing as {sessionStorage.getItem('crm_impersonate_name')}</span>
-                <button
-                   className="bg-white text-indigo-600 px-3 py-1 rounded text-xs font-bold hover:bg-indigo-50"
-                   onClick={() => {
-                       sessionStorage.removeItem('crm_impersonate_token');
-                       sessionStorage.removeItem('crm_impersonate_name');
-                       window.location.href = '/app';
-                   }}>
-                   Exit
-                </button>
-            </div>
-        )}
+        <ImpersonationBanner />
         <header className="topbar">
           <div>
             <h2 className="topbar-title">{currentNav?.label || 'Dashboard'}</h2>

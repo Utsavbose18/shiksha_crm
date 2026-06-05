@@ -1,49 +1,47 @@
 import { useMemo, useState } from 'react';
 import { SectionCard, TextInput, TextArea, Modal } from './UI';
-import { apiFetch, formatLabel } from '../utils';
+import { APPLICATION_STATUS, apiFetch, formatLabel } from '../utils';
+
+const UNIVERSITY_CATEGORIES = ['global', 'superior', 'kings'];
 
 export default function ApplicationsView({
-  applications,
-  students,
-  universities,
+  applications = [],
+  students = [],
+  universities = [],
   auth,
   selectedStudentId,
   selectedApplicationId,
   setSelectedApplicationId,
   onRefresh,
+  onUniversitiesRefresh,
   setGlobalError,
   onOpenStudent,
 }) {
   const [showForm, setShowForm] = useState(false);
+  const [showUniversityForm, setShowUniversityForm] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [deletingId, setDeletingId] = useState(null);
-  const [form, setForm] = useState({
-    student_id: '',
-    university_id: '',
-    course_name: '',
-    intake_month: '',
-    intake_year: '',
-    application_deadline: '',
-    tuition_fee: '',
-    currency: 'USD',
-    application_fee: '',
-    notes: '',
-  });
+  const [form, setForm] = useState(getInitialApplicationForm(selectedStudentId));
+  const [universityForm, setUniversityForm] = useState(getInitialUniversityForm());
   const [submitting, setSubmitting] = useState(false);
+  const [universitySubmitting, setUniversitySubmitting] = useState(false);
 
   const studentMap = useMemo(() => {
     const map = new Map();
-    (students || []).forEach((student) => {
+    students.forEach((student) => {
       map.set(String(student.id), student);
     });
     return map;
   }, [students]);
 
+  const applicationStats = useMemo(() => buildApplicationStats(applications), [applications]);
+
   const filteredApplications = useMemo(() => {
     const query = search.trim().toLowerCase();
+    const normalizedFilter = String(statusFilter || '').toLowerCase();
 
-    return (applications || []).filter((app) => {
+    return applications.filter((app) => {
       const student = studentMap.get(String(app.student_id));
       const studentName = getStudentName(student).toLowerCase();
       const universityName = (app.university?.name || '').toLowerCase();
@@ -59,7 +57,7 @@ export default function ApplicationsView({
         ackNo.includes(query);
 
       const matchesStatus =
-        statusFilter === 'all' || status === statusFilter;
+        normalizedFilter === 'all' || status === normalizedFilter;
 
       return matchesSearch && matchesStatus;
     });
@@ -69,6 +67,23 @@ export default function ApplicationsView({
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
+  function updateUniversity(field, value) {
+    setUniversityForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function openApplicationForm() {
+    setForm((prev) => ({
+      ...prev,
+      student_id: prev.student_id || selectedStudentId || '',
+    }));
+    setShowForm(true);
+  }
+
+  function closeApplicationForm() {
+    setShowForm(false);
+    setShowUniversityForm(false);
+  }
+
   async function submit(e) {
     e.preventDefault();
     setSubmitting(true);
@@ -76,6 +91,7 @@ export default function ApplicationsView({
     try {
       const sid = form.student_id || selectedStudentId;
       if (!sid) throw new Error('Select a student first');
+      if (!form.university_id) throw new Error('Select a university first');
 
       await apiFetch(`/api/students/${sid}/applications/`, {
         method: 'POST',
@@ -93,24 +109,55 @@ export default function ApplicationsView({
       });
 
       setShowForm(false);
-      setForm({
-        student_id: sid,
-        university_id: '',
-        course_name: '',
-        intake_month: '',
-        intake_year: '',
-        application_deadline: '',
-        tuition_fee: '',
-        currency: 'USD',
-        application_fee: '',
-        notes: '',
-      });
+      setForm(getInitialApplicationForm(sid));
 
       await onRefresh();
     } catch (err) {
       setGlobalError(err.message);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function submitUniversity(e) {
+    e.preventDefault();
+    setUniversitySubmitting(true);
+
+    try {
+      const payload = {
+        name: universityForm.name.trim(),
+        country: universityForm.country.trim(),
+        city: universityForm.city.trim() || null,
+        category: universityForm.category,
+      };
+
+      if (!payload.name || !payload.country) {
+        throw new Error('University name and country are required');
+      }
+
+      if (!UNIVERSITY_CATEGORIES.includes(payload.category)) {
+        throw new Error('Select a valid university partner type');
+      }
+
+      const created = await apiFetch('/api/universities/', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      if (onUniversitiesRefresh) {
+        await onUniversitiesRefresh();
+      }
+
+      if (created?.id) {
+        update('university_id', String(created.id));
+      }
+
+      setUniversityForm(getInitialUniversityForm());
+      setShowUniversityForm(false);
+    } catch (err) {
+      setGlobalError(err.message);
+    } finally {
+      setUniversitySubmitting(false);
     }
   }
 
@@ -143,71 +190,68 @@ export default function ApplicationsView({
   }
 
   return (
-    <div className="view-stack">
+    <div className="view-stack applications-workspace">
       <SectionCard
         title={auth.role === 'student' ? 'My Applications' : 'Applications'}
-        subtitle="Track and manage student applications in one professional workspace"
+        subtitle="Track student applications, offers, visa stages, and pending work."
         actions={
           auth.role !== 'student' && (
-            <button className="btn-primary" onClick={() => setShowForm(true)}>
-              + Add Application
+            <button className="btn-primary app-primary-action" onClick={openApplicationForm}>
+              <IconPlus />
+              <span>Add Application</span>
             </button>
           )
         }
         noPad
       >
         <div className="app-shell-header">
-          <div className="applications-toolbar applications-toolbar-single">
-            <div className="applications-search">
+          <div className="applications-stats-grid">
+            {applicationStats.map((stat) => (
+              <div className={`application-stat application-stat-${stat.tone}`} key={stat.label}>
+                <span className="application-stat-label">{stat.label}</span>
+                <strong>{stat.value}</strong>
+                <small>{stat.helper}</small>
+              </div>
+            ))}
+          </div>
+
+          <div className="applications-command-bar">
+            <label className="applications-search" aria-label="Search applications">
+              <IconSearch />
               <input
                 type="text"
-                className="field-input"
-                placeholder="Search by ACK no., student, university, or program"
+                placeholder="Search ACK, student, university, or program"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-            </div>
+            </label>
 
-            <div className="applications-filters">
+            <label className="applications-filter-field">
+              <span>Status</span>
               <select
-                className="field-select"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
                 <option value="all">All Status</option>
-                <option value="initiated">Initiated</option>
-                <option value="pending_from_student">Pending from Student</option>
-                <option value="pending_from_LS">Pending From LS</option>
-                <option value="conditional_offer">Conditional Offer</option>
-                <option value="unconditional_offer">Unconditional Offer</option>
-                <option value="offer_accepted">Offer Accepted</option>
-                <option value="rejected">Rejected</option>
-                <option value="waitlisted">Waitlisted</option>
-                <option value="withdrawn">Withdrawn</option>
-                <option value="case_closed">Case closed</option>
-                <option value="application_on_hold">Application on hold</option>
-                <option value="funds_approved">Funds Approved</option>
-                <option value="deferral">Deferral</option>
-                <option value="fee_paid">Fee Paid</option>
-                <option value="tuition_payment_not_done">Tuition payment not done</option>
-                <option value="visa_applied">Visa Applied</option>
-                <option value="visa_rejected">Visa Rejected</option>
-                <option value="visa_approved">Visa Approved</option>
-                
+                {APPLICATION_STATUS.map((status) => (
+                  <option key={status} value={status}>
+                    {formatLabel(status)}
+                  </option>
+                ))}
               </select>
-            </div>
+            </label>
           </div>
         </div>
 
-        <div className="section-body">
+        <div className="section-body applications-section-body">
           {filteredApplications.length === 0 ? (
-            <div className="empty-state empty-state-soft">
+            <div className="empty-state empty-state-soft applications-empty-state">
               <div className="empty-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z"
                   />
                 </svg>
               </div>
@@ -216,13 +260,20 @@ export default function ApplicationsView({
                 {applications.length === 0
                   ? auth.role === 'student'
                     ? 'Your applications will appear here.'
-                    : 'Select a student and add their first application.'
+                    : 'Add the first student application to start tracking progress.'
                   : 'Try changing your search or status filter.'}
               </p>
+              {auth.role !== 'student' && applications.length === 0 && (
+                <button className="btn-primary app-primary-action" onClick={openApplicationForm}>
+                  <IconPlus />
+                  <span>Add Application</span>
+                </button>
+              )}
             </div>
           ) : (
             <AppliedProgramsTableView
               applications={filteredApplications}
+              totalApplications={applications.length}
               students={students}
               auth={auth}
               deletingId={deletingId}
@@ -236,41 +287,60 @@ export default function ApplicationsView({
       </SectionCard>
 
       {showForm && (
-        <Modal title="Add New Application" onClose={() => setShowForm(false)}>
-          <form className="form-grid" onSubmit={submit}>
+        <Modal title="Add New Application" onClose={closeApplicationForm}>
+          <div className="application-form-intro">
+            <strong>Application Details</strong>
+            <span>Select the student and university, then capture the program and fee details.</span>
+          </div>
+
+          <form className="form-grid application-form-grid" onSubmit={submit}>
             <label className="field">
               <span className="field-label">Student</span>
               <select
                 className="field-select"
-                value={form.student_id || selectedStudentId}
+                value={form.student_id || selectedStudentId || ''}
                 onChange={(e) => update('student_id', e.target.value)}
                 required
               >
                 <option value="">Select student</option>
-                {students.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {getStudentName(s)} ({s.email})
+                {students.map((student) => (
+                  <option key={student.id} value={student.id}>
+                    {getStudentName(student)} ({student.email})
                   </option>
                 ))}
               </select>
             </label>
 
-            <label className="field">
-              <span className="field-label">University</span>
+            <div className="field application-university-field">
+              <div className="field-label-row">
+                <span className="field-label">University</span>
+                {auth.role !== 'student' && (
+                  <button
+                    type="button"
+                    className="inline-tool-btn"
+                    onClick={() => setShowUniversityForm(true)}
+                  >
+                    <IconPlus />
+                    <span>Add</span>
+                  </button>
+                )}
+              </div>
               <select
                 className="field-select"
                 value={form.university_id}
                 onChange={(e) => update('university_id', e.target.value)}
                 required
               >
-                <option value="">Select university</option>
-                {universities.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
+                <option value="">
+                  {universities.length ? 'Select university' : 'No universities added yet'}
+                </option>
+                {universities.map((university) => (
+                  <option key={university.id} value={university.id}>
+                    {university.name}
                   </option>
                 ))}
               </select>
-            </label>
+            </div>
 
             <TextInput
               label="Program Name"
@@ -289,7 +359,9 @@ export default function ApplicationsView({
             <TextInput
               label="Intake Year"
               type="number"
-              placeholder="2025"
+              placeholder="2026"
+              min="1900"
+              max="2200"
               value={form.intake_year}
               onChange={(e) => update('intake_year', e.target.value)}
             />
@@ -304,6 +376,8 @@ export default function ApplicationsView({
             <TextInput
               label="Tuition Fee"
               type="number"
+              min="0"
+              step="0.01"
               value={form.tuition_fee}
               onChange={(e) => update('tuition_fee', e.target.value)}
             />
@@ -311,12 +385,15 @@ export default function ApplicationsView({
             <TextInput
               label="Currency"
               value={form.currency}
-              onChange={(e) => update('currency', e.target.value)}
+              onChange={(e) => update('currency', e.target.value.toUpperCase())}
+              maxLength="3"
             />
 
             <TextInput
               label="Application Fee"
               type="number"
+              min="0"
+              step="0.01"
               value={form.application_fee}
               onChange={(e) => update('application_fee', e.target.value)}
             />
@@ -329,11 +406,86 @@ export default function ApplicationsView({
             />
 
             <div className="form-actions field-full">
-              <button type="button" className="btn-outline" onClick={() => setShowForm(false)}>
+              <button type="button" className="btn-outline" onClick={closeApplicationForm}>
                 Cancel
               </button>
-              <button className="btn-primary" disabled={submitting}>
-                {submitting ? 'Creating...' : 'Create Application'}
+              <button className="btn-primary app-primary-action" disabled={submitting}>
+                {submitting ? (
+                  'Creating...'
+                ) : (
+                  <>
+                    <IconCheck />
+                    <span>Create Application</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {showUniversityForm && (
+        <Modal title="Add University" onClose={() => setShowUniversityForm(false)}>
+          <div className="application-form-intro">
+            <strong>University Details</strong>
+            <span>This will be available immediately in the application form.</span>
+          </div>
+
+          <form className="form-grid application-form-grid" onSubmit={submitUniversity}>
+            <TextInput
+              label="University Name"
+              value={universityForm.name}
+              onChange={(e) => updateUniversity('name', e.target.value)}
+              required
+            />
+
+            <TextInput
+              label="Country"
+              value={universityForm.country}
+              onChange={(e) => updateUniversity('country', e.target.value)}
+              required
+            />
+
+            <TextInput
+              label="City"
+              value={universityForm.city}
+              onChange={(e) => updateUniversity('city', e.target.value)}
+            />
+
+            <label className="field">
+              <span className="field-label">Partner Type</span>
+              <select
+                className="field-select"
+                value={universityForm.category}
+                onChange={(e) => updateUniversity('category', e.target.value)}
+                required
+              >
+                {UNIVERSITY_CATEGORIES.map((category) => (
+                  <option key={category} value={category}>
+                    {formatLabel(category)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="form-actions field-full">
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => setShowUniversityForm(false)}
+              >
+                Cancel
+              </button>
+
+              <button className="btn-primary app-primary-action" disabled={universitySubmitting}>
+                {universitySubmitting ? (
+                  'Saving...'
+                ) : (
+                  <>
+                    <IconCheck />
+                    <span>Add University</span>
+                  </>
+                )}
               </button>
             </div>
           </form>
@@ -345,6 +497,7 @@ export default function ApplicationsView({
 
 function AppliedProgramsTableView({
   applications,
+  totalApplications,
   students,
   auth,
   deletingId,
@@ -355,7 +508,7 @@ function AppliedProgramsTableView({
 }) {
   const studentMap = useMemo(() => {
     const map = new Map();
-    (students || []).forEach((student) => {
+    students.forEach((student) => {
       map.set(String(student.id), student);
     });
     return map;
@@ -369,15 +522,15 @@ function AppliedProgramsTableView({
         <table className="applications-table">
           <thead>
             <tr>
-              <th>ACK. No.</th>
+              <th>ACK No.</th>
               <th>Date Created</th>
-              <th>Student Name</th>
+              <th>Student</th>
               <th>LS Assignee</th>
-              <th>University Name</th>
-              <th>Program Name</th>
+              <th>University</th>
+              <th>Program</th>
               <th>Intake</th>
               <th>Created By</th>
-              <th>Application Status</th>
+              <th>Status</th>
               <th className="th-actions">Actions</th>
             </tr>
           </thead>
@@ -403,7 +556,7 @@ function AppliedProgramsTableView({
                     <button
                       type="button"
                       className="ack-link"
-                      onClick={e => {
+                      onClick={(e) => {
                         e.stopPropagation();
                         setSelectedApplicationId(String(app.id));
                         if (onOpenStudent && app.student_id) {
@@ -415,25 +568,25 @@ function AppliedProgramsTableView({
                     </button>
                   </td>
 
-                  <td>{formatCreatedAt(app.created_at)}</td>
+                  <td className="table-date-cell">{formatCreatedAt(app.created_at)}</td>
 
                   <td>
                     <div className="table-primary-cell">
                       <span className="cell-title">{getStudentName(student)}</span>
-                      <span className="cell-subtitle">{student?.email || '—'}</span>
+                      <span className="cell-subtitle">{student?.email || '-'}</span>
                     </div>
                   </td>
                   <td>{getLsAssigneeName(student)}</td>
                   <td>
                     <div className="table-primary-cell">
-                      <span className="cell-title">{app.university?.name || '—'}</span>
-                      <span className="cell-subtitle">{app.university?.country || '—'}</span>
+                      <span className="cell-title">{app.university?.name || '-'}</span>
+                      <span className="cell-subtitle">{app.university?.country || '-'}</span>
                     </div>
                   </td>
 
                   <td>
                     <div className="table-primary-cell">
-                      <span className="cell-title">{app.course_name || '—'}</span>
+                      <span className="cell-title">{app.course_name || '-'}</span>
                       <span className="cell-subtitle">
                         {app.notes ? clampText(app.notes, 44) : 'No notes added'}
                       </span>
@@ -450,8 +603,6 @@ function AppliedProgramsTableView({
                     </span>
                   </td>
 
-                  
-
                   <td className="td-actions" onClick={(e) => e.stopPropagation()}>
                     {canDelete ? (
                       <button
@@ -459,11 +610,20 @@ function AppliedProgramsTableView({
                         className="table-action-btn table-action-btn-danger"
                         onClick={() => onDelete(app)}
                         disabled={isDeleting}
+                        aria-label={`Delete application ${buildAckNo(app)}`}
+                        title="Delete application"
                       >
-                        {isDeleting ? 'Deleting...' : 'Delete'}
+                        {isDeleting ? (
+                          'Deleting...'
+                        ) : (
+                          <>
+                            <IconTrash />
+                            <span>Delete</span>
+                          </>
+                        )}
                       </button>
                     ) : (
-                      <span className="table-action-placeholder">—</span>
+                      <span className="table-action-placeholder">-</span>
                     )}
                   </td>
                 </tr>
@@ -472,14 +632,15 @@ function AppliedProgramsTableView({
           </tbody>
         </table>
       </div>
-        <TableFooterBar
-      count={applications.length}
-      total={applications.length}
-      actionLabel="View Total Applications"
-    />
+      <TableFooterBar
+        count={applications.length}
+        total={totalApplications}
+        actionLabel="View Total Applications"
+      />
     </div>
   );
 }
+
 function TableFooterBar({ count, total, actionLabel }) {
   const hasRows = count > 0;
 
@@ -505,20 +666,96 @@ function TableFooterBar({ count, total, actionLabel }) {
     </div>
   );
 }
+
+function getInitialApplicationForm(studentId = '') {
+  return {
+    student_id: studentId || '',
+    university_id: '',
+    course_name: '',
+    intake_month: '',
+    intake_year: '',
+    application_deadline: '',
+    tuition_fee: '',
+    currency: 'USD',
+    application_fee: '',
+    notes: '',
+  };
+}
+
+function getInitialUniversityForm() {
+  return {
+    name: '',
+    country: '',
+    city: '',
+    category: 'global',
+  };
+}
+
+function buildApplicationStats(applications) {
+  const list = applications || [];
+  const activeStatuses = new Set([
+    'initiated',
+    'pending_from_student',
+    'pending_from_ls',
+    'application_on_hold',
+    'funds_approved',
+    'deferral',
+    'fee_paid',
+    'tuition_payment_not_done',
+  ]);
+  const offerStatuses = new Set(['conditional_offer', 'unconditional_offer', 'offer_accepted']);
+  const visaStatuses = new Set(['visa_applied', 'visa_approved', 'visa_rejected']);
+
+  const active = list.filter((app) => activeStatuses.has(normalizeStatus(app.application_status))).length;
+  const offers = list.filter((app) => offerStatuses.has(normalizeStatus(app.application_status))).length;
+  const visa = list.filter((app) => visaStatuses.has(normalizeStatus(app.application_status))).length;
+
+  return [
+    {
+      label: 'Total Applications',
+      value: list.length,
+      helper: 'All tracked programs',
+      tone: 'neutral',
+    },
+    {
+      label: 'Active Pipeline',
+      value: active,
+      helper: 'In progress now',
+      tone: 'blue',
+    },
+    {
+      label: 'Offers',
+      value: offers,
+      helper: 'Conditional or accepted',
+      tone: 'green',
+    },
+    {
+      label: 'Visa Stage',
+      value: visa,
+      helper: 'Visa activity',
+      tone: 'orange',
+    },
+  ];
+}
+
+function normalizeStatus(status) {
+  return String(status || '').toLowerCase();
+}
+
 function getStudentName(student) {
-  if (!student) return '—';
+  if (!student) return '-';
   const fullName = [student.first_name, student.last_name].filter(Boolean).join(' ').trim();
-  return fullName || student.email || '—';
+  return fullName || student.email || '-';
 }
 
 function getLsAssigneeName(student) {
-  if (!student) return '—';
+  if (!student) return '-';
 
   return (
     student.counsellor_name ||
     student.counsellor?.full_name ||
     student.assigned_counsellor_name ||
-    '—'
+    '-'
   );
 }
 
@@ -532,10 +769,10 @@ function buildAckNo(app) {
 }
 
 function formatCreatedAt(value) {
-  if (!value) return '—';
+  if (!value) return '-';
 
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
+  if (Number.isNaN(date.getTime())) return '-';
 
   return date.toLocaleDateString('en-IN', {
     day: '2-digit',
@@ -546,18 +783,15 @@ function formatCreatedAt(value) {
 
 function formatIntake(month, year) {
   const text = [month, year].filter(Boolean).join(' ').trim();
-  return text || '—';
+  return text || '-';
 }
 
 function getCreatedByLabel(app, auth) {
   if (auth?.role === 'student') return 'Student';
   if (auth?.role === 'admin') return 'Admin';
   if (auth?.role === 'counsellor') return 'Counsellor';
-  return '—';
+  return '-';
 }
-
-
-
 
 function clampText(value, limit = 40) {
   if (!value) return '';
@@ -568,14 +802,57 @@ function getStatusColor(status) {
   const map = {
     accepted: 'green',
     unconditional_offer: 'green',
+    offer_accepted: 'green',
+    visa_approved: 'green',
+    funds_approved: 'green',
     rejected: 'red',
     withdrawn: 'gray',
+    visa_rejected: 'red',
     under_review: 'orange',
     conditional_offer: 'orange',
     waitlisted: 'orange',
+    application_on_hold: 'orange',
+    deferral: 'orange',
+    pending_from_student: 'orange',
+    pending_from_ls: 'orange',
     applied: 'blue',
     shortlisted: 'blue',
+    initiated: 'blue',
+    fee_paid: 'blue',
+    visa_applied: 'blue',
   };
 
-  return map[status] || 'gray';
+  return map[normalizeStatus(status)] || 'gray';
+}
+
+function IconPlus() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+function IconSearch() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z" />
+    </svg>
+  );
+}
+
+function IconCheck() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="m5 12 5 5L20 7" />
+    </svg>
+  );
+}
+
+function IconTrash() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M8 6V4h8v2m-9 0 1 16h8l1-16" />
+    </svg>
+  );
 }

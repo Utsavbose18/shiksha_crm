@@ -75,8 +75,9 @@ def get_current_user(
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
-    # Attach tenant_id from token to the user object for convenience in endpoints
+    # Attach token-scoped context to the user object for endpoint checks.
     user.active_tenant_id = tenant_id
+    user.impersonated_by = payload.get("impersonated_by")
 
     return user
 

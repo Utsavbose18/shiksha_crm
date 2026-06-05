@@ -14,7 +14,9 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
 from app.core.database import get_db
+from app.core.plan_limits import check_limit
 from app.core.security import hash_password, require_roles, get_current_user
+from app.models.tenant import Tenant
 from app.models.user import (
     User, Student, UserRole,
     AcademicQualification, AcademicLevel,
@@ -92,13 +94,19 @@ def create_student(
     current_user=Depends(staff_roles),
 ):
     tenant_id = getattr(current_user, "active_tenant_id", None)
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="No active tenant context")
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    current_count = db.query(Student).filter(Student.tenant_id == tenant_id).count()
+    check_limit(current_count, tenant.subscription_plan, "max_students", "students")
+
     if db.query(Student).filter(Student.email == payload.email, Student.tenant_id == tenant_id).first():
         raise HTTPException(status_code=400, detail="Email already exists in this tenant")
     student = Student(
         tenant_id=tenant_id,
         email=payload.email,
-        hashed_password=hash_password(payload.password),
-        letzstudy_email=payload.letzstudy_email,
         first_name=payload.first_name,
         last_name=payload.last_name,
         phone=payload.phone,
@@ -111,7 +119,19 @@ def create_student(
     db.add(student)
     db.commit()
     db.refresh(student)
-    return student
+    return {
+        "id": student.id,
+        "email": student.email,
+        "letzstudy_email": None,
+        "first_name": student.first_name,
+        "last_name": student.last_name,
+        "phone": student.phone,
+        "lead_status": student.lead_status,
+        "application_status": None,
+        "counsellor_id": student.counsellor_id,
+        "counsellor_name": current_user.full_name if current_user.role == UserRole.counsellor else None,
+        "created_at": student.created_at,
+    }
 
 
 from app.models.user import Application  # add to imports if not already there
@@ -125,7 +145,11 @@ def list_students(
     search: Optional[str] = None,
     lead_status: Optional[str] = None,
 ):
-    q = db.query(Student)
+    tenant_id = getattr(current_user, "active_tenant_id", None)
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="No active tenant context")
+
+    q = db.query(Student).filter(Student.tenant_id == tenant_id)
     if current_user.role == UserRole.counsellor:
         q = q.filter(Student.counsellor_id == current_user.id)
     if search:
@@ -138,6 +162,7 @@ def list_students(
         q = q.filter(Student.lead_status == lead_status)
 
     students = q.offset(skip).limit(limit).all()
+    student_ids = [s.id for s in students]
 
     # Build counsellor name map
     counsellor_ids = {s.counsellor_id for s in students if s.counsellor_id}
@@ -163,6 +188,7 @@ def list_students(
             (Application.student_id == latest_ts_subq.c.student_id)
             & (Application.updated_at == latest_ts_subq.c.max_updated_at),
         )
+        .filter(Application.student_id.in_(student_ids) if student_ids else False)
         .all()
     )
     app_status_map = {row.student_id: row.application_status for row in latest_apps}
@@ -172,7 +198,7 @@ def list_students(
         result.append({
             "id": s.id,
             "email": s.email,
-            "letzstudy_email": s.letzstudy_email,
+            "letzstudy_email": None,
             "first_name": s.first_name,
             "last_name": s.last_name,
             "phone": s.phone,
@@ -310,9 +336,10 @@ def reset_student_password(
     _=Depends(admin_only),
 ):
     student = _get_student_or_404(db, student_id)
-    student.hashed_password = hash_password(payload.new_password)
-    db.commit()
-    return {"message": "Password reset"}
+    raise HTTPException(
+        status_code=400,
+        detail="Students are CRM records in the B2B flow and do not have login passwords.",
+    )
 
 
 # ─── Pre-Application Summary ──────────────────────────────────────────────────

@@ -215,6 +215,7 @@ class User(Base):
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_login_at = Column(DateTime, nullable=True, index=True)
     must_change_password = Column(Boolean, default=True)
 
     students_counselled = relationship("Student", back_populates="assigned_counsellor",

@@ -1,9 +1,12 @@
 """
 Authentication endpoints for all roles.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
+from app.core.audit_logger import log_action
 from app.core.security import oauth2_scheme
 from app.core.database import get_db
 from app.core.security import (
@@ -47,12 +50,51 @@ def _make_tokens(
     )
 
 
+def _log_login_failed(db: Session, email: str, request: Request) -> None:
+    log_action(
+        db=db,
+        user_id=None,
+        tenant_id=None,
+        action="login_failed",
+        module_name="auth",
+        record_type="user",
+        record_id=None,
+        new_values={"email": email},
+        ip_address=request.client.host if request and request.client else None,
+        user_agent=request.headers.get("user-agent") if request else None,
+    )
+
+
+def _log_login_success(
+    db: Session,
+    user,
+    tenant_id: int | None,
+    request: Request,
+    record_type: str = "user",
+) -> None:
+    if isinstance(user, User):
+        user.last_login_at = datetime.utcnow()
+
+    log_action(
+        db=db,
+        user_id=user.id if isinstance(user, User) else None,
+        tenant_id=tenant_id,
+        action="login_success",
+        module_name="auth",
+        record_type=record_type,
+        record_id=user.id,
+        ip_address=request.client.host if request and request.client else None,
+        user_agent=request.headers.get("user-agent") if request else None,
+    )
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Login
 # ──────────────────────────────────────────────────────────────────────────────
 
 @router.post("/login", response_model=TokenResponse)
 def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
@@ -65,11 +107,13 @@ def login(
     ).first()
     if platform_user:
         if not verify_password(password, platform_user.hashed_password):
+            _log_login_failed(db, email, request)
             raise HTTPException(status_code=401, detail="Invalid credentials")
         if not platform_user.is_active:
             raise HTTPException(status_code=403, detail="Account not activated")
 
         role = platform_user.role.value if hasattr(platform_user.role, "value") else platform_user.role
+        _log_login_success(db, platform_user, None, request)
         return _make_tokens(
             platform_user.id,
             role,
@@ -97,19 +141,10 @@ def login(
             Student.tenant_id == tenant_id_to_use
         ).first()
         if student:
-            if not verify_password(password, student.hashed_password):
-                raise HTTPException(status_code=401, detail="Invalid credentials")
-            if not student.is_active:
-                raise HTTPException(status_code=403, detail="Account is inactive")
-
-            full_name = f"{student.first_name or ''} {student.last_name or ''}".strip() or student.email
-
-            return _make_tokens(
-                student.id,
-                "student",
-                full_name,
-                getattr(student, "must_change_password", False),
-                tenant_id_to_use
+            _log_login_failed(db, email, request)
+            raise HTTPException(
+                status_code=401,
+                detail="Student login is not configured for this tenant. Please contact your counsellor.",
             )
 
     # 2️⃣ Admin / Counsellor / Staff login
@@ -121,6 +156,7 @@ def login(
 
     if user:
         if not verify_password(password, user.hashed_password):
+            _log_login_failed(db, email, request)
             raise HTTPException(status_code=401, detail="Invalid credentials")
         if not user.is_active:
             raise HTTPException(status_code=403, detail="Account not activated")
@@ -128,15 +164,18 @@ def login(
         # Keep the application role stable for the frontend and route guards.
         # RBAC permissions are checked separately via UserRoleMapping.
         role = user.role.value if hasattr(user.role, "value") else user.role
+        resolved_tenant_id = tenant_id_to_use or user.tenant_id
+        _log_login_success(db, user, resolved_tenant_id, request)
 
         return _make_tokens(
             user.id,
             role,
             user.full_name,
             getattr(user, "must_change_password", False),
-            tenant_id_to_use or user.tenant_id # fallback to user's primary tenant
+            resolved_tenant_id # fallback to user's primary tenant
         )
 
+    _log_login_failed(db, email, request)
     raise HTTPException(status_code=401, detail="Invalid credentials")
 
 

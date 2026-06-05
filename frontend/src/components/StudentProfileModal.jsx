@@ -40,6 +40,16 @@ const intakeMonthOptions = [
 ];
 const currentYearForIntake = new Date().getFullYear();
 const intakeYearOptions = Array.from({ length: 6 }, (_, i) => String(currentYearForIntake + i));
+const universityCategoryOptions = ['global', 'superior', 'kings'];
+
+function getBlankUniversityForm() {
+  return {
+    name: '',
+    country: '',
+    city: '',
+    category: 'global',
+  };
+}
 
 // ─── VALIDATION HELPERS ─────────────────────────────────────────────
 
@@ -713,6 +723,9 @@ function ApplicationsTab({
   const [messages, setMessages] = useState([]);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [showNewForm, setShowNewForm] = useState(false);
+  const [showUniversityForm, setShowUniversityForm] = useState(false);
+  const [universitySaving, setUniversitySaving] = useState(false);
+  const [newUniversity, setNewUniversity] = useState(getBlankUniversityForm);
   const [paymentMode, setPaymentMode] = useState('');
   const [customPaymentMode, setCustomPaymentMode] = useState('');
   const [offerFieldId, setOfferFieldId] = useState(null);
@@ -790,12 +803,59 @@ function ApplicationsTab({
       setApps(prev => [created, ...prev]);
       setSelectedId(created.id);
       setShowNewForm(false);
+      setShowUniversityForm(false);
       // Reset form with correct keys
       setNewApp({ university_id: '', program: '', intake: '', year: '', notes: '', representative: '', representative_other: '' });
       showToast('Application created', 'success');
       if (typeof onRefresh === 'function') onRefresh();
     } catch (e) { showToast(e.message, 'error'); }
     setSaving(false);
+  };
+
+  const createUniversity = async () => {
+    const payload = {
+      name: newUniversity.name.trim(),
+      country: newUniversity.country.trim(),
+      city: newUniversity.city.trim() || null,
+      category: newUniversity.category,
+    };
+
+    if (!payload.name || !payload.country) {
+      showToast('University name and country are required', 'error');
+      return;
+    }
+
+    if (!universityCategoryOptions.includes(payload.category)) {
+      showToast('Select a valid partner type', 'error');
+      return;
+    }
+
+    setUniversitySaving(true);
+    try {
+      const created = await apiFetch('/api/universities/', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      if (created?.id) {
+        setNewApp(prev => ({ ...prev, university_id: String(created.id) }));
+        setUniversities(prev => [
+          created,
+          ...prev.filter(item => String(item.id) !== String(created.id)),
+        ]);
+      }
+
+      const refreshed = await apiFetch('/api/universities/?').catch(() => null);
+      if (Array.isArray(refreshed)) setUniversities(refreshed);
+
+      setNewUniversity(getBlankUniversityForm());
+      setShowUniversityForm(false);
+      showToast('University added', 'success');
+    } catch (e) {
+      showToast(e.message, 'error');
+    } finally {
+      setUniversitySaving(false);
+    }
   };
 
   const updateStatus = async (field, value) => {
@@ -908,7 +968,11 @@ function ApplicationsTab({
   const PreApplicationView = (
     <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
       <button
-        onClick={() => setShowNewForm(v => !v)}
+        onClick={() => setShowNewForm(v => {
+          const next = !v;
+          if (!next) setShowUniversityForm(false);
+          return next;
+        })}
         style={{ background: C.accent, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', alignSelf: 'flex-start' }}
       >
         {showNewForm ? '✕ Cancel' : '+ Add Application'}
@@ -923,7 +987,7 @@ function ApplicationsTab({
           <div style={{ padding: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 
             {/* University dropdown — full width */}
-            <div style={{ gridColumn: '1 / -1' }}>
+            <div className="application-process-university-row" style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 10, alignItems: 'end' }}>
               <Field
                 label="University"
                 value={newApp.university_id}
@@ -934,7 +998,70 @@ function ApplicationsTab({
                 }))}
                 required
               />
+              <button
+                type="button"
+                className="inline-tool-btn"
+                onClick={() => setShowUniversityForm(v => !v)}
+                style={{ minHeight: 38 }}
+              >
+                {showUniversityForm ? 'Close' : '+ Add University'}
+              </button>
             </div>
+
+            {showUniversityForm && (
+              <div className="application-process-add-university-panel" style={{ gridColumn: '1 / -1', border: `1px solid ${C.border}`, borderRadius: 10, background: C.surfaceAlt, padding: 14 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 12 }}>
+                  <strong style={{ color: C.text, fontSize: 13 }}>Add University</strong>
+                  <span style={{ color: C.textLight, fontSize: 12 }}>Create it here and continue the same application.</span>
+                </div>
+                <div className="application-process-university-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <Field
+                    label="University Name"
+                    value={newUniversity.name}
+                    onChange={v => setNewUniversity(p => ({ ...p, name: v }))}
+                    required
+                  />
+                  <Field
+                    label="Country"
+                    value={newUniversity.country}
+                    onChange={v => setNewUniversity(p => ({ ...p, country: v }))}
+                    required
+                  />
+                  <Field
+                    label="City"
+                    value={newUniversity.city}
+                    onChange={v => setNewUniversity(p => ({ ...p, city: v }))}
+                  />
+                  <Field
+                    label="Partner Type"
+                    value={newUniversity.category}
+                    onChange={v => setNewUniversity(p => ({ ...p, category: v }))}
+                    options={universityCategoryOptions.map(value => ({ value, label: formatLabel(value) }))}
+                    required
+                  />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewUniversity(getBlankUniversityForm());
+                      setShowUniversityForm(false);
+                    }}
+                    style={{ background: '#fff', color: C.textMid, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={createUniversity}
+                    disabled={universitySaving}
+                    style={{ background: C.accent, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: universitySaving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 8, opacity: universitySaving ? 0.7 : 1 }}
+                  >
+                    {universitySaving && <Spinner size={14} />} Save University
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Course — full width */}
             <div style={{ gridColumn: '1 / -1' }}>
@@ -1737,7 +1864,6 @@ export function StudentProfileModal({
               <div style={{ fontSize: 13, color: C.textLight, marginTop: 2, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                 <span>✉ {student?.email}</span>
                 {student?.phone && <span>+91 {student.phone}</span>}
-                <span>Letzstudy email: {student.letzstudy_email}</span>
               </div>
             </div>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1769,7 +1895,6 @@ export function StudentProfileModal({
                 <Field label="Middle Name" value={pf.middle_name} onChange={fieldChange('middle_name')} />
                 <Field label="Last Name" value={pf.last_name} onChange={v => { fieldChange('last_name')(v); setPersonalForm(p => ({...p, last_name: v})); }} required />
                 <Field label="Email" value={student?.email} onChange={() => {}} disabled validate={isValidEmail} errorMsg="Email must contain @ and end with .com" />
-                <Field label="Letzstudy email" value={student?.letzstudy_email} onChange={() => {}} disabled validate={isValidEmail} errorMsg="Email must contain @ and end with .com" />
                 <Field label="Phone" value={pf.phone} onChange={fieldChange('phone')} type="tel" validate={isValidPhone} errorMsg="Phone must be exactly 10 digits" />
                 <Field label="Date of Birth" value={pf.date_of_birth} onChange={v => setFormField('date_of_birth', v)} type="date" required max={today} validate={v => !v || new Date(v) <= new Date()} errorMsg="Date of birth cannot be in the future" />
                 <Field label="Gender" value={pf.gender} onChange={v => setFormField('gender', v)} options={['Male', 'Female', 'Non-binary', 'Prefer not to say']} />

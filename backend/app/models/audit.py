@@ -17,3 +17,15 @@ class AuditLog(Base):
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ImpersonationLog(Base):
+    __tablename__ = "impersonation_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    superadmin_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    target_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    target_tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    action = Column(String(50), nullable=False)
+    ip_address = Column(String(45), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

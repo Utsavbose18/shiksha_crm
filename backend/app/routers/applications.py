@@ -3,6 +3,7 @@ Applications (post-application) + isolated per-university chat.
 """
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 import uuid
 from pathlib import Path
@@ -10,8 +11,10 @@ from app.services.email_service import send_email
 from app.services.chat_formatter import format_single_message
 from app.models.user import Student
 from app.core.database import get_db
+from app.core.plan_limits import check_limit
 from app.core.security import get_current_user, require_roles
 from app.core.config import settings
+from app.models.tenant import Tenant
 from app.models.user import (
     Application, ApplicationMessage, University,
     Student, UserRole, Notification,User
@@ -196,11 +199,25 @@ def create_application(
     student = _get_student_or_404(db, student_id)
     _assert_access(current_user, student)
 
+    tenant = db.query(Tenant).filter(Tenant.id == student.tenant_id).first()
+    if tenant:
+        current_count = (
+            db.query(Application)
+            .outerjoin(Student, Student.id == Application.student_id)
+            .filter(or_(Application.tenant_id == student.tenant_id, Student.tenant_id == student.tenant_id))
+            .count()
+        )
+        check_limit(current_count, tenant.subscription_plan, "max_applications", "applications")
+
     uni = db.query(University).filter(University.id == payload.university_id).first()
     if not uni:
         raise HTTPException(status_code=404, detail="University not found")
 
-    app = Application(student_id=student_id, **payload.model_dump())  # ✅ THIS LINE DOES EVERYTHING
+    app = Application(
+        tenant_id=student.tenant_id,
+        student_id=student_id,
+        **payload.model_dump(),
+    )
 
     db.add(app)
     db.commit()

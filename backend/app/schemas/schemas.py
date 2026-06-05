@@ -92,8 +92,8 @@ class UserOut(BaseModel):
 
 class StudentCreate(BaseModel):
     email: EmailStr
-    password: str
-    letzstudy_email:EmailStr
+    password: Optional[str] = None
+    letzstudy_email: Optional[EmailStr] = None
     first_name: str
     last_name: str
     phone: Optional[str] = None
@@ -163,7 +163,7 @@ class StudentPersonalInfoUpdate(BaseModel):
 class StudentListOut(BaseModel):
     id: int
     email: str
-    letzstudy_email:str
+    letzstudy_email: Optional[str] = None
     first_name: Optional[str]
     last_name: Optional[str]
     phone: Optional[str]
@@ -180,7 +180,7 @@ class StudentListOut(BaseModel):
 class StudentProfileOut(BaseModel):
     id: int
     email: str
-    letzstudy_email:str
+    letzstudy_email: Optional[str] = None
     first_name: Optional[str]
     middle_name: Optional[str]
     last_name: Optional[str]
@@ -1090,3 +1090,145 @@ class SaveTemplateFromStudentRequest(BaseModel):
         if not v or not v.strip():
             raise ValueError("country must not be empty")
         return v.strip()
+
+
+# Platform Operations Center
+
+class TenantHealthStats(BaseModel):
+    tenant_id: int
+    total_users: int
+    total_students: int
+    total_applications: int
+    storage_used_mb: float
+    storage_limit_mb: float
+    storage_pct: float
+    last_activity_at: Optional[datetime]
+    setup_completed: bool
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+class TenantWithHealth(BaseModel):
+    id: int
+    name: str
+    slug: str
+    logo_url: Optional[str]
+    primary_color: Optional[str]
+    secondary_color: Optional[str]
+    custom_domain: Optional[str]
+    subscription_plan: str
+    subscription_status: str
+    storage_limit_mb: float
+    storage_used_mb: float
+    is_active: bool
+    created_at: datetime
+    health: TenantHealthStats
+
+    class Config:
+        from_attributes = True
+
+
+class OnboardingCheck(BaseModel):
+    key: str
+    label: str
+    status: bool
+    is_required: bool
+    detail: Optional[str] = None
+
+
+class OnboardingStatus(BaseModel):
+    tenant_id: int
+    tenant_name: str
+    checks: List[OnboardingCheck]
+    overall_pct: int
+    is_complete: bool
+
+
+class PlatformAlert(BaseModel):
+    alert_id: str
+    severity: str
+    type: str
+    title: str
+    detail: str
+    tenant_id: Optional[int]
+    tenant_name: Optional[str]
+    created_at: datetime
+
+
+class SuperadminTenantUserOut(BaseModel):
+    id: int
+    email: str
+    full_name: str
+    role: str
+    is_active: bool
+    must_change_password: bool
+    created_at: datetime
+    last_login_at: Optional[datetime] = None
+
+
+class SuperadminAuditLogOut(BaseModel):
+    id: int
+    tenant_id: Optional[int] = None
+    user_id: Optional[int] = None
+    user_email: Optional[str] = None
+    action: str
+    module_name: str
+    record_type: str
+    record_id: Optional[int] = None
+    ip_address: Optional[str] = None
+    created_at: datetime
+
+
+class SuperadminBranchOut(BaseModel):
+    id: int
+    tenant_id: int
+    name: str
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TenantPlanUpdate(BaseModel):
+    subscription_plan: str
+    storage_limit_mb: Optional[float] = None
+
+    @field_validator("subscription_plan")
+    @classmethod
+    def validate_subscription_plan(cls, value: str) -> str:
+        allowed = {"Free Trial", "Starter", "Professional", "Enterprise"}
+        cleaned = value.strip() if value else ""
+        if cleaned not in allowed:
+            raise ValueError(f"subscription_plan must be one of: {', '.join(sorted(allowed))}")
+        return cleaned
+
+    @field_validator("storage_limit_mb")
+    @classmethod
+    def validate_storage_limit(cls, value: Optional[float]) -> Optional[float]:
+        if value is not None and value <= 0:
+            raise ValueError("storage_limit_mb must be greater than 0")
+        return value
+
+
+class ImpersonationTargetOut(BaseModel):
+    id: int
+    email: str
+    role: str
+    tenant_id: Optional[int] = None
+
+
+class ImpersonationResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    target_user: ImpersonationTargetOut
+    expires_in_minutes: int
+    warning: str

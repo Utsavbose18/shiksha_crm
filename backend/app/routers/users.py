@@ -1,12 +1,15 @@
 """
 User management – Admin only (create counsellors, activate/deactivate).
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.core.database import get_db
+from app.core.audit_logger import log_action
+from app.core.plan_limits import check_limit
 from app.core.security import hash_password, require_roles
+from app.models.tenant import Tenant
 from app.models.user import User, UserRole, Payment, DocumentFile,  DocumentField, TestType,CustomProfileField,Note,StudentNote,EnquiryStudent,EnquiryNote,Student
 from app.schemas.schemas import UserCreate, UserUpdate, UserOut, PasswordResetByAdmin
 
@@ -26,6 +29,7 @@ def _assert_user_visible(user: User, current_user: User) -> None:
 @router.post("/", response_model=UserOut, status_code=201)
 def create_user(
     payload: UserCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(admin_only),
 ):
@@ -38,6 +42,14 @@ def create_user(
         tenant_id = getattr(current_user, "active_tenant_id", None)
         if not tenant_id:
             raise HTTPException(status_code=403, detail="No active tenant context")
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+        current_user_count = db.query(User).filter(
+            User.tenant_id == tenant_id,
+            User.is_active == True,
+        ).count()
+        check_limit(current_user_count, tenant.subscription_plan, "max_users", "staff users")
 
     user = User(
         email=payload.email,
@@ -53,6 +65,18 @@ def create_user(
     db.add(user)
     db.commit()
     db.refresh(user)
+    log_action(
+        db=db,
+        user_id=current_user.id,
+        tenant_id=user.tenant_id,
+        action="user_created",
+        module_name="users",
+        record_type="user",
+        record_id=user.id,
+        new_values={"email": user.email, "role": user.role.value if hasattr(user.role, "value") else str(user.role)},
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
     return user
 
 
@@ -107,24 +131,46 @@ def update_user(
 
 
 @router.post("/{user_id}/activate")
-def activate_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(admin_only)):
+def activate_user(user_id: int, request: Request, db: Session = Depends(get_db), current_user: User = Depends(admin_only)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     _assert_user_visible(user, current_user)
     user.is_active = True
     db.commit()
+    log_action(
+        db=db,
+        user_id=current_user.id,
+        tenant_id=user.tenant_id,
+        action="user_activated",
+        module_name="users",
+        record_type="user",
+        record_id=user.id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
     return {"message": "User activated"}
 
 
 @router.post("/{user_id}/deactivate")
-def deactivate_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(admin_only)):
+def deactivate_user(user_id: int, request: Request, db: Session = Depends(get_db), current_user: User = Depends(admin_only)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     _assert_user_visible(user, current_user)
     user.is_active = False
     db.commit()
+    log_action(
+        db=db,
+        user_id=current_user.id,
+        tenant_id=user.tenant_id,
+        action="user_deactivated",
+        module_name="users",
+        record_type="user",
+        record_id=user.id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
     return {"message": "User deactivated"}
 
 
@@ -132,6 +178,7 @@ def deactivate_user(user_id: int, db: Session = Depends(get_db), current_user: U
 def reset_password(
     user_id: int,
     payload: PasswordResetByAdmin,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(admin_only),
 ):
@@ -146,18 +193,31 @@ def reset_password(
     user.must_change_password = True
 
     db.commit()
+    log_action(
+        db=db,
+        user_id=current_user.id,
+        tenant_id=user.tenant_id,
+        action="password_reset_by_admin",
+        module_name="users",
+        record_type="user",
+        record_id=user.id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
 
     return {"message": "Password reset successfully"}
 
 from datetime import datetime
 
 @router.delete("/{user_id}", status_code=204)
-def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(admin_only)):
+def delete_user(user_id: int, request: Request, db: Session = Depends(get_db), current_user: User = Depends(admin_only)):
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     _assert_user_visible(user, current_user)
+    target_tenant_id = user.tenant_id
+    target_email = user.email
 
     try:
         # NULLIFY references (safer than delete)
@@ -179,6 +239,18 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User 
         db.delete(user)
 
         db.commit()
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            tenant_id=target_tenant_id,
+            action="user_deleted",
+            module_name="users",
+            record_type="user",
+            record_id=user_id,
+            old_values={"email": target_email},
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
 
     except Exception:
         db.rollback()
