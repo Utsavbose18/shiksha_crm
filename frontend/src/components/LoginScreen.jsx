@@ -24,8 +24,8 @@ export default function LoginScreen({ onLogin, error, loading }) {
     <div className="login-shell">
       <div className="login-left">
         <div className="login-brand">
-          <div className="brand-logo">LS</div>
-          <span>LetzStudy CRM</span>
+          <div className="brand-logo">S</div>
+          <span>Shiksha</span>
         </div>
 
         <div className="login-hero-content">
@@ -70,7 +70,7 @@ export default function LoginScreen({ onLogin, error, loading }) {
         </div>
 
         <div className="login-left-footer">
-          <span>© 2026 LetzStudy CRM · Built for education counsellors</span>
+          <span>2026 Shiksha - Built for education counsellors</span>
         </div>
       </div>
 

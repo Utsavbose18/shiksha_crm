@@ -1173,7 +1173,7 @@ function LetzStudyDocumentsTab({ studentId, showToast }) {
       const letzFields = arr.filter(f => f.instructions?.startsWith(LETZ_TAG));
       setFields(letzFields);
       setSelectedIds(prev => { const next = new Set(prev); letzFields.forEach(f => { if (f.files?.length > 0) next.add(f.id); }); return next; });
-    } catch { showToast('Failed to load LetzStudy documents', 'error'); }
+    } catch { showToast('Failed to load Shiksha documents', 'error'); }
     finally { setLoading(false); }
   }, [studentId]);
 
@@ -1338,7 +1338,7 @@ export function DocumentsTab({ studentId, showToast, isAdmin, isCounsellor, stud
       <div style={{ display: 'flex', borderBottom: `2px solid ${C.border}`, marginBottom: 20 }}>
         {[
           { id: 'student',   label: '📁 Student Documents' },
-          { id: 'letzstudy', label: '🏢 LetzStudy Documents' },
+          { id: 'letzstudy', label: '🏢 Shiksha Documents' },
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
             style={{ background: 'none', border: 'none', borderBottom: `3px solid ${activeTab === tab.id ? C.accent : 'transparent'}`, marginBottom: -2, padding: '10px 24px', fontSize: 14, fontWeight: 700, color: activeTab === tab.id ? C.accent : C.textLight, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' }}>

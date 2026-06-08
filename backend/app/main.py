@@ -16,6 +16,7 @@ from app.routers import (
     country_templates,
     dashboard,
     documents,
+    dynamic_pages,
     me,
     notes,
     public,
@@ -72,6 +73,7 @@ app.include_router(me.router)
 app.include_router(users.router)
 app.include_router(students.router)
 app.include_router(documents.router)
+app.include_router(dynamic_pages.router)
 app.include_router(applications.router)
 app.include_router(services.router)
 app.include_router(dashboard.router)

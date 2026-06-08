@@ -3,6 +3,11 @@ import React, { useState, useRef, useCallback, useMemo, useEffect, memo } from '
 const API_BASE = import.meta.env.VITE_API_URL;
 import { apiFetch, formatLabel, formatDate, formatDateTime } from '../utils';
 import StudentNotesSection from './StudentNotesSection';
+import {
+  DynamicPageCreator,
+  DynamicStudentPageView,
+  mapDynamicValues,
+} from './DynamicStudentPages';
 
 
 // ─── THEME ────────────────────────────────────────────────────────────────────
@@ -1583,6 +1588,9 @@ export function StudentProfileModal({
 
   const [customFieldDefs, setCustomFieldDefs] = useState([]);
   const [customFieldValues, setCustomFieldValues] = useState({});
+  const [dynamicPages, setDynamicPages] = useState([]);
+  const [dynamicPageValues, setDynamicPageValues] = useState({});
+  const [pageCreatorOpen, setPageCreatorOpen] = useState(false);
 
   const [personalForm, setPersonalForm] = useState({});
   const personalFormRef = useRef({});
@@ -1600,6 +1608,18 @@ export function StudentProfileModal({
   const [editingWorkData, setEditingWorkData] = useState({});
 
   const showToast = useCallback((msg, type = 'info') => { setToast({ msg, type }); setTimeout(() => setToast(null), 4000); }, []);
+  const loadDynamicPages = useCallback(async () => {
+    const pages = await apiFetch('/api/student-dynamic-pages');
+    setDynamicPages(Array.isArray(pages) ? pages : []);
+    return Array.isArray(pages) ? pages : [];
+  }, []);
+  const loadDynamicValues = useCallback(async () => {
+    if (!studentId) return {};
+    const values = await apiFetch(`/api/student-dynamic-pages/students/${studentId}/values`);
+    const mapped = mapDynamicValues(Array.isArray(values) ? values : []);
+    setDynamicPageValues(mapped);
+    return mapped;
+  }, [studentId]);
   const changeTab = useCallback((tab) => {
     setActiveTab(tab);
     onTabChange(tab);
@@ -1615,10 +1635,12 @@ export function StudentProfileModal({
       apiFetch(`/api/students/${studentId}/work`),
       apiFetch(`/api/students/${studentId}/tests`),
       apiFetch('/api/admin/test-types?active_only=true'),
+      apiFetch('/api/student-dynamic-pages'),
+      apiFetch(`/api/student-dynamic-pages/students/${studentId}/values`),
     ];
     if (isAdmin) { promises.push(apiFetch(`/api/admin/custom-fields/student/${studentId}?active_only=true`), apiFetch(`/api/students/${studentId}/custom-field-values`)); }
     Promise.all(promises).then((results) => {
-      const [s, a, w, t, tt, cf, cfv] = results;
+      const [s, a, w, t, tt, pages, pageValues, cf, cfv] = results;
       const p = s || propStudent;
       setStudent(p);
       const form = {
@@ -1654,6 +1676,8 @@ export function StudentProfileModal({
       setWorkExps(Array.isArray(w) ? w : []);
       setTestScores(Array.isArray(t) ? t : []);
       setTestTypes(Array.isArray(tt) ? tt : []);
+      setDynamicPages(Array.isArray(pages) ? pages : []);
+      setDynamicPageValues(mapDynamicValues(Array.isArray(pageValues) ? pageValues : []));
       if (isAdmin) {
         setCustomFieldDefs(Array.isArray(cf) ? cf : []);
         const valMap = {};
@@ -1713,6 +1737,18 @@ export function StudentProfileModal({
     try { const cf = await apiFetch(`/api/admin/custom-fields/student/${studentId}?active_only=true`); setCustomFieldDefs(Array.isArray(cf) ? cf : []); }
     catch { setCustomFieldDefs(prev => [...prev, newField]); }
   }, [studentId]);
+
+  const handleDynamicPageCreated = useCallback(async (createdPage) => {
+    const pages = await loadDynamicPages().catch(() => createdPage ? [...dynamicPages, createdPage] : dynamicPages);
+    const page = createdPage || pages[pages.length - 1];
+    if (page?.id) changeTab(`dynamic-${page.id}`);
+    setPageCreatorOpen(false);
+  }, [changeTab, dynamicPages, loadDynamicPages]);
+
+  const handleDynamicPagesChanged = useCallback(async () => {
+    await loadDynamicPages();
+    await loadDynamicValues();
+  }, [loadDynamicPages, loadDynamicValues]);
 
   const saveAcademic = async (entry, isNew) => {
     const key = entry.id || 'new'; setAcademicSaving(key);
@@ -1815,8 +1851,19 @@ export function StudentProfileModal({
     { id: 'profile', label: '1 · Profile' },
     { id: 'applications', label: '2 · Applications' },
     { id: 'documents', label: '3 · Documents' },
-    { id: 'notes', label: '4 · LetzStudy Notes' },
+    { id: 'notes', label: '4 · Shiksha Notes' },
   ];
+
+  const visibleTabs = [
+    ...tabs,
+    ...dynamicPages.map((page, index) => ({
+      id: `dynamic-${page.id}`,
+      label: `${index + 5} Â· ${page.name}`,
+    })),
+  ];
+  const activeDynamicPage = activeTab.startsWith('dynamic-')
+    ? dynamicPages.find(page => `dynamic-${page.id}` === activeTab)
+    : null;
 
   if (loading) {
     return (
@@ -1836,6 +1883,12 @@ export function StudentProfileModal({
         button:hover { opacity: 0.88; }
       `}</style>
       <Toast toast={toast} />
+      <DynamicPageCreator
+        open={pageCreatorOpen}
+        onClose={() => setPageCreatorOpen(false)}
+        onCreated={handleDynamicPageCreated}
+        showToast={showToast}
+      />
 
       {/* TOP NAV */}
       <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: '0 32px', position: 'sticky', top: 0, zIndex: 100 }}>
@@ -1872,12 +1925,23 @@ export function StudentProfileModal({
           </div>
 
           <div style={{ display: 'flex', borderTop: `1px solid ${C.border}`, marginTop: 4 }}>
-            {tabs.map(tab => (
+            {visibleTabs.map(tab => (
               <button key={tab.id} onClick={() => changeTab(tab.id)}
                 style={{ background: 'none', border: 'none', padding: '12px 22px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: activeTab === tab.id ? C.accent : C.textLight, borderBottom: `2.5px solid ${activeTab === tab.id ? C.accent : 'transparent'}`, marginBottom: -1, fontFamily: 'inherit', transition: 'all 0.15s' }}>
                 {tab.label}
               </button>
             ))}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setPageCreatorOpen(true)}
+                title="Add dynamic page"
+                aria-label="Add dynamic page"
+                style={{ marginLeft: 'auto', alignSelf: 'center', width: 30, height: 30, borderRadius: 8, border: `1px solid ${C.accentMid}`, background: C.accentLight, color: C.accent, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                +
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -2138,6 +2202,19 @@ export function StudentProfileModal({
         )}
 
         {activeTab === 'notes' && <StudentNotesSection studentId={studentId} />}
+
+        {activeDynamicPage && (
+          <DynamicStudentPageView
+            page={activeDynamicPage}
+            pages={dynamicPages}
+            studentId={studentId}
+            values={dynamicPageValues}
+            setValues={setDynamicPageValues}
+            isAdmin={isAdmin}
+            showToast={showToast}
+            onPagesChanged={handleDynamicPagesChanged}
+          />
+        )}
       </div>
     </div>
   );

@@ -591,7 +591,7 @@ function App({ showLoginOnly }) {
         <header className="topbar">
           <div>
             <h2 className="topbar-title">{currentNav?.label || 'Dashboard'}</h2>
-            <p className="topbar-sub">LetzStudy — Student Counselling Platform</p>
+            <p className="topbar-sub">Shiksha - Student Counselling Platform</p>
           </div>
         </header>
 
